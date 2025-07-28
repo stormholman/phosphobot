@@ -16,6 +16,7 @@ import {
   Hand,
   Keyboard,
   RectangleGoggles,
+  Bot,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -23,6 +24,7 @@ import { GamepadControl } from "./GamepadControlPage";
 import { KeyboardControl } from "./KeyboardControlPage";
 import { LeaderArmControl } from "./LeaderArmControlPage";
 import { SingleArmReplay } from "./SingleArmReplayPage";
+import SimulationPage from "./SimulationPage";
 
 export function ControlPage() {
   const showCamera = useGlobalStore((state) => state.showCamera);
@@ -55,6 +57,12 @@ export function ControlPage() {
       tooltip: "Move with your hands",
     },
     { value: "VR", icon: RectangleGoggles, label: "VR", tooltip: "VR control" },
+    {
+      value: "simulation",
+      icon: Bot,
+      label: "Simulation",
+      tooltip: "Simulation view",
+    },
   ];
 
   return (
@@ -161,6 +169,9 @@ export function ControlPage() {
               </div>
             </div>
           </div>
+        </TabsContent>
+        <TabsContent value="simulation">
+          <SimulationPage />
         </TabsContent>
       </Tabs>
     </div>
