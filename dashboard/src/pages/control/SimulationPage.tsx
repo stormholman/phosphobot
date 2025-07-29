@@ -18,7 +18,7 @@ const SimulationPage: React.FC = () => {
     console.log("🔍 Checking simulation status...");
     setError(null);
     try {
-      const response = await fetch("http://localhost:80/simulation/status");
+      const response = await fetch("http://localhost:8020/simulation/status");
       console.log("📡 Status response:", response.status, response.statusText);
       
       if (!response.ok) {
@@ -39,8 +39,8 @@ const SimulationPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      console.log("📡 Making POST request to http://localhost:80/simulation/launch");
-      const response = await fetch("http://localhost:80/simulation/launch", {
+      console.log("📡 Making POST request to http://localhost:8020/simulation/launch");
+      const response = await fetch("http://localhost:8020/simulation/launch", {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ const SimulationPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("http://localhost:80/simulation/stop", {
+      const response = await fetch("http://localhost:8020/simulation/stop", {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
