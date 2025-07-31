@@ -28,7 +28,7 @@ class SO100IntegratedControl:
         self.sim = SO100Simulation()
         
         # Robot mirroring configuration
-        self.phosphobot_ip = "192.168.178.191"
+        self.phosphobot_ip = "192.168.178.190"
         self.phosphobot_port = 80
         self.joints_read_url = f"http://{self.phosphobot_ip}:{self.phosphobot_port}/joints/read"
         self.mirror_frequency = 0.2  # 5 Hz - very conservative to avoid MuJoCo conflicts
@@ -336,7 +336,12 @@ class SO100IntegratedControl:
         self.show_examples()
         self.get_current_pose()
         self.show_commands()
-        
+
+        # --- start mirroring automatically ---
+        print("\n🔄 Auto-starting robot mirroring …")
+        self.start_mirroring()
+        # --------------------------------------
+
         try:
             while self.sim.viewer.is_running():
                 print("\n" + "-"*40)
