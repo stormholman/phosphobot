@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Play, Square, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -22,6 +24,7 @@ const SimulationPage: React.FC = () => {
   const [kinematicsStatus, setKinematicsStatus] = useState<KinematicsStatus | null>(null);
   const [isKinematicsLoading, setIsKinematicsLoading] = useState(false);
   const [kinematicsError, setKinematicsError] = useState<string | null>(null);
+  const [aiTask, setAiTask] = useState<string>("red cup"); // AI task input state
 
   const checkSimulationStatus = async () => {
     console.log("🔍 Checking simulation status...");
@@ -124,6 +127,13 @@ const SimulationPage: React.FC = () => {
 
   const launchKinematics = async (mode: "manual" | "ai") => {
     console.log(`🚀 Launch kinematics (${mode}) button clicked`);
+    
+    // Validate AI task input for AI mode
+    if (mode === "ai" && !aiTask.trim()) {
+      setKinematicsError("Please enter a task description for AI mode");
+      return;
+    }
+    
     setIsKinematicsLoading(true);
     setKinematicsError(null);
     try {
@@ -133,6 +143,7 @@ const SimulationPage: React.FC = () => {
         headers: {
           "Content-Type": "application/json",
         },
+        body: mode === "ai" ? JSON.stringify({ task: aiTask.trim() }) : undefined,
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -312,6 +323,24 @@ const SimulationPage: React.FC = () => {
                       Error: {kinematicsError}
                     </div>
                   )}
+
+                  {/* AI Task Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-task" className="text-sm font-medium">
+                      AI Task Description (for AI Target mode)
+                    </Label>
+                    <Input
+                      id="ai-task"
+                      type="text"
+                      placeholder="e.g., red cup, blue bottle, green apple..."
+                      value={aiTask}
+                      onChange={(e) => setAiTask(e.target.value)}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Describe the object you want the AI to locate and track
+                    </p>
+                  </div>
 
                   <div className="flex items-center gap-4 flex-wrap">
                     <Button

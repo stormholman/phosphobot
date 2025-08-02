@@ -34,20 +34,27 @@ class VisionAnalyzer:
                 # Try to load from config file
                 from config import get_config
                 config = get_config()
-                api_key = config.get('anthropic_api_key', '')
+                api_key = config.get('anthropic_api_key', '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')
                 if api_key:
                     os.environ['ANTHROPIC_API_KEY'] = api_key
                     print("[Vision] API key loaded from config")
             except ImportError:
                 print("[Vision] No config.py found")
             
-            # If still no API key, prompt user
+            # If still no API key, check if running interactively
             if not api_key:
-                api_key = input("Enter your Anthropic API key: ").strip()
-                if api_key:
-                    os.environ['ANTHROPIC_API_KEY'] = api_key
+                # Check if stdin is available (interactive mode)
+                if sys.stdin.isatty():
+                    api_key = input("Enter your Anthropic API key: ").strip()
+                    if api_key:
+                        os.environ['ANTHROPIC_API_KEY'] = api_key
+                    else:
+                        print("[Vision] Warning: No API key provided. Vision features will not work.")
+                        return
                 else:
-                    print("[Vision] Warning: No API key provided. Vision features will not work.")
+                    # Non-interactive mode (subprocess) - don't prompt, just warn
+                    print("[Vision] Warning: No API key found. AI vision features will not work.")
+                    print("[Vision] Set ANTHROPIC_API_KEY environment variable to enable AI features.")
                     return
         
         # Initialize client

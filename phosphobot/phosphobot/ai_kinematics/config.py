@@ -1,4 +1,5 @@
 # Configuration file for Kinematics AI
+import os
 
 def get_config():
     """
@@ -6,7 +7,7 @@ def get_config():
     """
     return {
         # Anthropic API key for Claude vision analysis
-        'anthropic_api_key': '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',
+        'anthropic_api_key': os.getenv('ANTHROPIC_API_KEY', ''),
         
         # Optional: Other configuration settings
         'vision_model': 'claude-sonnet-4-20250514',

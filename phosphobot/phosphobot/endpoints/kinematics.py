@@ -4,8 +4,9 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from loguru import logger
+from pydantic import BaseModel
 
 from phosphobot.models import StatusResponse
 
@@ -14,10 +15,13 @@ router = APIRouter(tags=["kinematics"])
 # Global variable to track the AI-kinematics subprocess
 kinematics_process: Optional[subprocess.Popen[str]] = None
 
+class AITaskRequest(BaseModel):
+    task: str
 
 @router.post("/kinematics/launch", response_model=StatusResponse)
 async def launch_kinematics(
     background_tasks: BackgroundTasks,
+    request: Request,
     mode: Literal["manual", "ai"] = Query("manual", description="Operating mode for the kinematics app"),
 ) -> StatusResponse:
     """Launch the AI-kinematics stream processing in *manual* or *AI* mode.
@@ -33,9 +37,24 @@ async def launch_kinematics(
         raise HTTPException(status_code=400, detail="Kinematics process already running")
 
     # Clean up any finished process handle
-    kinematics_process = None
+    if kinematics_process is not None:
+        kinematics_process = None
+
+    # Get task description for AI mode
+    task_description = "red cup"  # default
+    if mode == "ai":
+        try:
+            body = await request.json()
+            if body and "task" in body:
+                task_description = body["task"].strip()
+                if not task_description:
+                    task_description = "red cup"
+        except Exception:
+            # If no body or invalid JSON, use default
+            pass
 
     try:
+        # Find the main script
         current_dir = Path(__file__).parent.parent  # .../phosphobot/
         kin_dir = current_dir / "ai_kinematics"
         main_script = kin_dir / "main.py"
@@ -49,15 +68,24 @@ async def launch_kinematics(
             mode,
         ]
         if mode == "ai":
-            cmd.append("red cup")  # default task for AI mode
+            cmd.append(task_description)  # use user-provided or default task
 
         # Spawn the process with proper error capture
+        import os
+        env = os.environ.copy()
+        # Ensure GUI applications can access the display
+        if "DISPLAY" not in env:
+            env["DISPLAY"] = ":0"
+        # Set Anthropic API key for AI features
+        env["ANTHROPIC_API_KEY"] = "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"  # Replace with actual key
+        
         kinematics_process = subprocess.Popen(
             cmd,
             cwd=str(kin_dir),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            env=env,  # Pass the environment with DISPLAY and API key
         )
         
         # Give the process a moment to start
