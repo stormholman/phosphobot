@@ -26,6 +26,7 @@ from phosphobot.endpoints import (
     training_router,
     update_router,
     simulation_router,
+    kinematics_router,
 )
 from phosphobot.hardware import get_sim
 from phosphobot.models import ServerStatus
@@ -210,6 +211,7 @@ app.include_router(networking_router)
 app.include_router(update_router)
 app.include_router(auth_router)
 app.include_router(simulation_router)
+app.include_router(kinematics_router)
 
 # TODO : Only allow secured origins
 app.add_middleware(

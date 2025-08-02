@@ -965,22 +965,409 @@ class KinematicsApp(DemoApp):
 
             self.event.clear()
 
+    def _start_processing_stream_with_mode(self, mode):
+        """Start processing stream with specified mode (bypasses interactive selection)"""
+        print("\n" + "="*60)
+        print("STARTING RGBD STREAM")
+        print("="*60)
+        
+        if mode == 'manual':
+            print("📱 MANUAL MODE ACTIVE")
+            print("Instructions:")
+            print("  • Move mouse over depth window to see 3D positions")
+            print("  • Press 'p' to input specific coordinates")
+            print("  • Press 'q' to quit")
+            
+        elif mode == 'ai':
+            print("🤖 AI VISION MODE ACTIVE")
+            print(f"Task: {self.vision_target_description}")
+            print("Instructions:")
+            print("  • AI will analyze the first frame automatically")
+            print("  • Green crosshair shows AI target")
+            print("  • Press 'r' to re-analyze with new task")
+            print("  • Press 'q' to quit")
+        
+        print("\n⏳ Waiting for RGBD stream...")
+        
+        first_frame_processed = False
+        
+        while True:
+            self.event.wait()  # Wait for new frame to arrive
+
+            # Copy the newly arrived RGBD frame
+            depth = self.session.get_depth_frame()
+            rgb = self.session.get_rgb_frame()
+            confidence = self.session.get_confidence_frame()
+            
+            # Get depth intrinsics (Record3D only provides depth intrinsics)
+            # For iPhone cameras, RGB and depth intrinsics are very similar
+            depth_intrinsic_coeffs = self.session.get_intrinsic_mat()
+            
+            depth_intrinsic_mat = self.get_intrinsic_mat_from_coeffs(depth_intrinsic_coeffs)
+            # Use same intrinsics for RGB as they're co-located on iPhone
+            rgb_intrinsic_mat = depth_intrinsic_mat.copy()
+            
+            camera_pose = self.session.get_camera_pose()
+
+            # Store both intrinsic matrices
+            self.intrinsic_mat = depth_intrinsic_mat  # Keep for backward compatibility
+            self.depth_intrinsic_mat = depth_intrinsic_mat
+            self.rgb_intrinsic_mat = rgb_intrinsic_mat
+            
+            # Debug print intrinsics (only first time)
+            if not hasattr(self, '_intrinsics_printed'):
+                print(f"[Camera] Using shared intrinsics - fx:{depth_intrinsic_mat[0,0]:.1f} fy:{depth_intrinsic_mat[1,1]:.1f} cx:{depth_intrinsic_mat[0,2]:.1f} cy:{depth_intrinsic_mat[1,2]:.1f}")
+                print(f"[Camera] Note: iPhone RGB and depth cameras are co-located with very similar intrinsics")
+                self._intrinsics_printed = True
+
+            # Postprocess frames
+            if self.session.get_device_type() == self.DEVICE_TYPE__TRUEDEPTH:
+                depth = cv2.flip(depth, 1)
+                rgb = cv2.flip(rgb, 1)
+
+            rgb = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+            # Save depth for calculations and store RGB for vision analysis
+            self.depth = depth
+            self.current_rgb = rgb.copy()
+            
+            # Detect ArUco marker each frame for ALL modes (AFTER frames are processed and stored)
+            if self.current_rgb is not None and self.rgb_intrinsic_mat is not None:
+                was_detected = self.current_pose_T_cam_marker is not None
+                self.detect_aruco_marker()
+                # Only print when marker detection status changes
+                if self.current_pose_T_cam_marker is not None and not was_detected:
+                    print(f"[ArUco] ✅ Marker {self.aruco_marker_id} detected and pose estimated")
+                elif self.current_pose_T_cam_marker is None and was_detected:
+                    print(f"[ArUco] ❌ Marker {self.aruco_marker_id} lost")
+            
+            # Auto-analyze first frame in AI mode (AFTER ArUco detection is done)
+            if mode == 'ai' and not first_frame_processed and self.vision_target_description and self.rgb_intrinsic_mat is not None:
+                print("🔍 Analyzing first frame with AI...")
+                result = self.vision_analyzer.analyze_image(self.current_rgb, self.vision_target_description, self.depth)
+                
+                if result and result.get('success'):
+                    self.vision_result = result
+                    x, y = result['target_pixel']
+                    
+                    # Scale coordinates from RGB to depth frame if needed
+                    rgb_height, rgb_width = self.current_rgb.shape[:2]
+                    depth_height, depth_width = self.depth.shape[:2]
+                    
+                    # Scale coordinates if RGB and depth have different dimensions
+                    if rgb_width != depth_width or rgb_height != depth_height:
+                        scale_x = depth_width / rgb_width
+                        scale_y = depth_height / rgb_height
+                        depth_x = int(x * scale_x)
+                        depth_y = int(y * scale_y)
+                        print(f"🔄 Scaling coordinates: RGB({x},{y}) -> Depth({depth_x},{depth_y})")
+                        print(f"   RGB: {rgb_width}x{rgb_height}, Depth: {depth_width}x{depth_height}")
+                    else:
+                        depth_x, depth_y = x, y
+                    
+                    # Get depth and calculate 3D position
+                    if 0 <= depth_y < self.depth.shape[0] and 0 <= depth_x < self.depth.shape[1]:
+                        depth_value = float(self.depth[depth_y, depth_x])
+                        if depth_value > 0:
+                            # Use original RGB coordinates for 3D calculation (intrinsics are for RGB)
+                            pos_3d = self.pixel_to_3d_position(x, y, depth_value, self.rgb_intrinsic_mat)
+                            if pos_3d:
+                                X, Y, Z = pos_3d
+                                print(f"\n✅ AI FOUND TARGET!")
+                                print(f"Object: {result.get('object_description', 'Found')}")
+                                print(f"RGB Pixel: ({x}, {y})")
+                                print(f"Depth Pixel: ({depth_x}, {depth_y})")
+                                print(f"Depth: {depth_value:.3f}m")
+                                print(f"3D Position: ({X:.3f}, {Y:.3f}, {Z:.3f})m")
+                                if self.current_pose_T_cam_marker is not None:
+                                    # Transform to ArUco marker frame if available
+                                    marker_coords = self.pixel_to_marker_coordinates(x, y)
+                                    if marker_coords is not None:
+                                        print(f"[ArUco] Relative to marker: ({marker_coords[0]:.3f},{marker_coords[1]:.3f},{marker_coords[2]:.3f})")
+                                        
+                                        # Send to robot
+                                        self.prompt_and_move_robot(marker_coords)
+                                    else:
+                                        print("[ArUco] ❌ Could not convert to marker coordinates")
+                                else:
+                                    print("[ArUco] ❌ No marker detected - cannot transform coordinates")
+                                print(f"Confidence: {result.get('confidence', 'N/A')}")
+                                
+                                # Store RGB coordinates for overlay (since RGB display uses RGB coords)
+                                self.last_mouse_pos = (x, y)
+                                self.depth_value = depth_value
+                            else:
+                                print("⚠️  Could not calculate 3D position")
+                        else:
+                            print(f"⚠️  Invalid depth at target: {depth_value}")
+                    else:
+                        print(f"⚠️  Target coordinates out of bounds: RGB({x},{y}) -> Depth({depth_x},{depth_y})")
+                        print(f"   Depth frame size: {depth_width}x{depth_height}")
+                else:
+                    print("❌ AI could not find the target object")
+                    if result:
+                        print(f"Reason: {result.get('reasoning', 'Unknown')}")
+                
+                first_frame_processed = True
+
+            # Apply vision overlay if in vision mode
+            if self.vision_mode and self.vision_result:
+                rgb = self.vision_analyzer.create_visualization(rgb, self.vision_result)
+            
+            # Overlay ArUco marker visualization on RGB
+            if self.current_pose_T_cam_marker is not None:
+                # Draw ArUco marker and axes
+                gray = cv2.cvtColor(self.current_rgb, cv2.COLOR_BGR2GRAY)
+                corners, ids, _ = self.aruco_detector.detectMarkers(gray)
+                
+                if ids is not None and self.aruco_marker_id in ids.flatten():
+                    idx = list(ids.flatten()).index(self.aruco_marker_id)
+                    cv2.aruco.drawDetectedMarkers(rgb, [corners[idx]])
+                    cv2.drawFrameAxes(rgb, self.rgb_intrinsic_mat, self.dist_coeffs, 
+                                    cv2.Rodrigues(self.current_pose_T_cam_marker[:3,:3])[0], 
+                                    self.current_pose_T_cam_marker[:3,3], self.aruco_marker_size*0.5)
+                    
+                    # If a pixel was clicked, draw its marker coordinate near the pixel
+                    if self.clicked_pixel and self.clicked_marker is not None:
+                        click_u, click_v = self.clicked_pixel
+                        cv2.circle(rgb, (click_u, click_v), 6, (0, 0, 255), 2)
+                        label = f"({self.clicked_marker[0]:.2f},{self.clicked_marker[1]:.2f},{self.clicked_marker[2]:.2f})m"
+                        cv2.putText(rgb, label, (click_u + 8, click_v - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 1)
+            
+            # Add mode indicator to RGB display
+            mode_text = f"Mode: {'AI VISION' if self.vision_mode else 'MANUAL'}"
+            cv2.putText(rgb, mode_text, (10, rgb.shape[0] - 10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            
+            if self.vision_mode and self.vision_target_description:
+                target_text = f"Task: {self.vision_target_description[:40]}..."
+                cv2.putText(rgb, target_text, (10, rgb.shape[0] - 40), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+            # Show the RGBD Stream
+            cv2.imshow('RGB', rgb)
+
+            # Show depth with overlay
+            depth_vis = depth.copy()
+            
+            # Show crosshair for manual mode or vision target
+            if self.last_mouse_pos and self.depth_value is not None:
+                rgb_x, rgb_y = self.last_mouse_pos
+                
+                # Convert RGB coordinates to depth coordinates for overlay
+                depth_x, depth_y = self.scale_coordinates_rgb_to_depth(rgb_x, rgb_y)
+                
+                # Different colors for different modes
+                color = (0, 255, 0) if self.vision_mode else (255, 255, 255)
+                
+                # Draw crosshair on depth display using depth coordinates
+                overlay = depth_vis.copy()
+                if self.vision_mode:
+                    # Larger crosshair for vision mode
+                    cv2.line(overlay, (depth_x - 15, depth_y), (depth_x + 15, depth_y), color, 2)
+                    cv2.line(overlay, (depth_x, depth_y - 15), (depth_x, depth_y + 15), color, 2)
+                    cv2.circle(overlay, (depth_x, depth_y), 10, color, 2)
+                else:
+                    # Small circle for manual mode
+                    cv2.circle(overlay, (depth_x, depth_y), 5, color, -1)
+                
+                alpha = 0.7 if self.vision_mode else 0.5
+                depth_vis = cv2.addWeighted(overlay, alpha, depth_vis, 1 - alpha, 0)
+                
+                # Show 3D position if available (using RGB coordinates for calculation)
+                if self.rgb_intrinsic_mat is not None:
+                    pos_3d = self.pixel_to_3d_position(rgb_x, rgb_y, self.depth_value, self.rgb_intrinsic_mat)
+                    if pos_3d:
+                        X, Y, Z = pos_3d
+                        if self.vision_mode:
+                            text = f"AI: {self.depth_value:.3f}m ({X:.2f},{Y:.2f},{Z:.2f})"
+                        else:
+                            text = f"{self.depth_value:.3f}m ({X:.2f},{Y:.2f},{Z:.2f})"
+                    else:
+                        text = f"{self.depth_value:.3f} m"
+                else:
+                    text = f"{self.depth_value:.3f} m"
+                    
+                cv2.putText(depth_vis, text, (depth_x + 20, depth_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            
+            # Add mode indicator to depth display
+            if mode == 'ai':
+                mode_indicator = "AI VISION"
+                color = (0, 255, 0)
+            else:  # manual
+                mode_indicator = "MANUAL"
+                color = (255, 255, 255)
+            
+            cv2.putText(depth_vis, mode_indicator, (10, 25), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            
+            cv2.imshow(self.depth_window_name, depth_vis)
+
+            if confidence.shape[0] > 0 and confidence.shape[1] > 0:
+                cv2.imshow('Confidence', confidence * 100)
+
+            # Handle keyboard input
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("\n👋 Quitting...")
+                break
+            elif key == ord('p') and mode != 'ai':
+                print("\n" + "="*50)
+                self.get_3d_position_from_input()
+                print("="*50)
+            elif key == ord('r') and mode == 'ai':
+                # Re-analyze with new task in AI mode
+                new_task = self.get_ai_task()
+                if new_task:
+                    self.vision_target_description = new_task
+                    print("🔄 Re-analyzing with new task...")
+                    result = self.vision_analyzer.analyze_image(self.current_rgb, new_task, self.depth)
+                    
+                    if result and result.get('success'):
+                        self.vision_result = result
+                        x, y = result['target_pixel']
+                        
+                        # Scale coordinates from RGB to depth frame if needed
+                        rgb_height, rgb_width = self.current_rgb.shape[:2]
+                        depth_height, depth_width = self.depth.shape[:2]
+                        
+                        if rgb_width != depth_width or rgb_height != depth_height:
+                            scale_x = depth_width / rgb_width
+                            scale_y = depth_height / rgb_height
+                            depth_x = int(x * scale_x)
+                            depth_y = int(y * scale_y)
+                        else:
+                            depth_x, depth_y = x, y
+                        
+                        if 0 <= depth_y < self.depth.shape[0] and 0 <= depth_x < self.depth.shape[1]:
+                            depth_value = float(self.depth[depth_y, depth_x])
+                            if depth_value > 0:
+                                pos_3d = self.pixel_to_3d_position(x, y, depth_value, self.rgb_intrinsic_mat)
+                                if pos_3d:
+                                    X, Y, Z = pos_3d
+                                    print(f"\n✅ NEW TARGET FOUND!")
+                                    print(f"Object: {result.get('object_description', 'Found')}")
+                                    print(f"RGB Pixel: ({x}, {y})")
+                                    print(f"Depth Pixel: ({depth_x}, {depth_y})")
+                                    print(f"Depth: {depth_value:.3f}m")
+                                    print(f"3D Position: ({X:.3f}, {Y:.3f}, {Z:.3f})m")
+                                    
+                                    # Transform to ArUco marker frame if available
+                                    if self.current_pose_T_cam_marker is not None:
+                                        marker_coords = self.pixel_to_marker_coordinates(x, y)
+                                        if marker_coords is not None:
+                                            print(f"[ArUco] Relative to marker: ({marker_coords[0]:.3f},{marker_coords[1]:.3f},{marker_coords[2]:.3f})")
+                                            
+                                            # Send to robot
+                                            self.prompt_and_move_robot(marker_coords)
+                                        else:
+                                            print("[ArUco] ❌ Could not convert to marker coordinates")
+                                    else:
+                                        print("[ArUco] ❌ No marker detected - cannot transform coordinates")
+                                    
+                                    self.last_mouse_pos = (x, y)
+                                    self.depth_value = depth_value
+                    else:
+                        print("❌ Could not find new target")
+            elif key == ord('v') and mode == 'hybrid':
+                if self.vision_analyzer.is_available():
+                    self.get_vision_target()
+                else:
+                    print("❌ Vision analyzer not available (API key required)")
+            elif key == ord('m') and mode == 'hybrid':
+                self.toggle_vision_mode()
+            elif key == ord('c') and mode == 'hybrid':
+                if self.vision_mode:
+                    self.vision_mode = False
+                    self.vision_result = None
+                    self.vision_target_description = ""
+                    print("🧹 Cleared vision target")
+                else:
+                    print("ℹ️  Not in vision mode")
+            elif key == ord('+') or key == ord('='):
+                # Increase marker size
+                self.aruco_marker_size += 0.01
+                print(f"[Debug] Marker size increased to: {self.aruco_marker_size:.3f}m")
+            elif key == ord('-') or key == ord('_'):
+                # Decrease marker size
+                self.aruco_marker_size = max(0.01, self.aruco_marker_size - 0.01)
+                print(f"[Debug] Marker size decreased to: {self.aruco_marker_size:.3f}m")
+
+            self.event.clear()
+
 def main():
     """Main function to run the kinematics application"""
+    import sys
+    
     print("Kinematics AI - RGBD 3D Position Calculator")
     print("=" * 50)
     
     app = KinematicsApp()
     
-    try:
-        app.connect_to_device(dev_idx=0)
-        app.start_processing_stream()
-    except KeyboardInterrupt:
-        print("\nApplication stopped by user")
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        cv2.destroyAllWindows()
+    # Check for command line arguments for non-interactive mode
+    if len(sys.argv) > 1:
+        mode_arg = sys.argv[1].lower()
+        if mode_arg in ['manual', '1']:
+            app.vision_mode = False
+            mode = 'manual'
+            print("🎯 MANUAL MODE (non-interactive)")
+        elif mode_arg in ['ai', '2']:
+            app.vision_mode = True
+            mode = 'ai'
+            # Set a default task for AI mode when run non-interactively
+            app.vision_target_description = "red cup" if len(sys.argv) < 3 else " ".join(sys.argv[2:])
+            print(f"🤖 AI VISION MODE (non-interactive) - Task: {app.vision_target_description}")
+        else:
+            print(f"Invalid mode: {mode_arg}. Use 'manual', 'ai', '1', or '2'")
+            return
+        
+        # Skip interactive mode selection and go straight to processing
+        try:
+            print("🔍 Attempting to connect to Record3D device...")
+            app.connect_to_device(dev_idx=0)
+            print("✅ Connected to Record3D device successfully")
+
+            # Monkey-patch interactive methods so start_processing_stream runs non-interactively
+            app.select_operating_mode = lambda: mode  # type: ignore
+            if mode == 'ai':
+                # get_ai_task should return the pre-set task description without prompting
+                app.get_ai_task = lambda: app.vision_target_description  # type: ignore
+
+            app.start_processing_stream()
+        except RuntimeError as e:
+            print(f"❌ Device connection error: {e}")
+            print("💡 Make sure:")
+            print("   • Record3D app is running on your iPhone")
+            print("   • iPhone is connected to the same network")
+            print("   • No firewall is blocking the connection")
+            return
+        except ImportError as e:
+            print(f"❌ Import error: {e}")
+            print("💡 Install missing dependencies:")
+            print("   pip install -r requirements.txt")
+            return
+        except KeyboardInterrupt:
+            print("\n👋 Application stopped by user")
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            try:
+                cv2.destroyAllWindows()
+            except:
+                pass
+    else:
+        # Interactive mode (original behavior)
+        try:
+            app.connect_to_device(dev_idx=0)
+            app.start_processing_stream()
+        except KeyboardInterrupt:
+            print("\nApplication stopped by user")
+        except Exception as e:
+            print(f"Error: {e}")
+        finally:
+            cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     main() 
