@@ -6,7 +6,6 @@ A robust MuJoCo simulation of the SO-100 robotic arm with interactive GUI, inver
 
 - **Real-time 3D visualization** with MuJoCo viewer
 - **Robust threading** - no more viewer conflicts during collisions
-- **Inverse kinematics solver** using Jacobian method
 - **Interactive banana object** for manipulation testing
 - **6-DOF robotic arm** simulation with gripper
 - **Real robot mirroring** support
@@ -25,26 +24,13 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### 1. Test the Simulation
-Verify everything works with a comprehensive test:
-
-```bash
-mjpython test_simulation.py
-```
-
-### 2. Quick Test
-Run a simple test to verify basic functionality:
-
-```bash
-mjpython quick_test.py
-```
-
-### 3. Full Integrated System
-Run the complete system with IK solver and robot mirroring:
+Run the integrated simulation with the MuJoCo viewer:
 
 ```bash
 mjpython main.py
 ```
+
+This starts the SO-100 arm simulation, opens the viewer, and enables inverse kinematics together with optional mirroring of the physical robot.
 
 ### 4. Use in Your Code
 
@@ -63,20 +49,17 @@ print(f"End effector at: {position}")
 
 # Close simulation
 sim.close()
+```
 
 ## File Structure
 
 ```
 so100_sim/
-├── so100_simulation.py      # Main simulation class with robust threading
-├── so100_ik_solver.py       # Inverse kinematics solver
-├── main.py                  # Integrated system with IK and robot mirroring
-├── so100_arm.xml           # MuJoCo model definition with banana object
-├── test_simulation.py       # Comprehensive test suite
-├── quick_test.py           # Simple functionality test
-├── assets/                 # 3D model files
-│   └── banana.stl          # Banana 3D model for interaction testing
-└── requirements.txt        # Python dependencies
+├── so100_simulation.py      # Main simulation class
+├── main.py                  # Simulation bootstrap + robot mirroring
+├── so100_arm.xml            # MuJoCo model definition
+├── rgbd_feed.py             # Record3D RGB-D camera helper (used by AI-kin)
+└── assets/                  # 3D model files, textures, etc.
 ```
 
 ## Key Components
@@ -199,34 +182,3 @@ so100_sim/
 ├── requirements.txt      # Dependencies (mujoco, numpy)
 └── README.md            # Complete documentation
 ```
-
-## Advanced Usage
-
-### Custom IK Parameters
-```python
-sim = SO100Simulation()
-sim.max_iterations = 200
-sim.tolerance = 1e-5
-sim.step_size = 0.05
-
-joint_angles = sim.move_to_position([0.3, 0.2, 0.4])
-```
-
-### Direct Joint Control
-```python
-# Set joint angles directly
-joint_angles = [0.5, -0.3, 1.2, 0.0, 0.8, -0.1]
-sim.set_joint_angles(joint_angles)
-
-# Get current joint angles
-current = sim.get_current_joint_angles()
-print(f"Current joint angles: {current}")
-```
-
-### Get End Effector Position
-```python
-current_pos = sim.get_end_effector_position()
-print(f"End effector at: {current_pos}")
-```
-
-This simulation provides a complete framework for experimenting with robotic arm control, inverse kinematics, and MuJoCo physics simulation. 

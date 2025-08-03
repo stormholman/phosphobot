@@ -9,7 +9,6 @@ import requests
 import math
 import threading
 from so100_simulation import SO100Simulation
-from so100_ik_solver import SO100IKSolver
 
 class SO100IntegratedControl:
     def __init__(self):
@@ -18,10 +17,6 @@ class SO100IntegratedControl:
         print("SO-100 INTEGRATED CONTROL SYSTEM")
         print("IK Solver + Real-time Simulation + Robot Mirroring")
         print("=" * 70)
-        
-        # Initialize IK solver (without viewer)
-        print("Initializing IK solver...")
-        self.ik_solver = SO100IKSolver()
         
         # Initialize simulation with viewer
         print("\nInitializing simulation with MuJoCo viewer...")
@@ -200,19 +195,6 @@ class SO100IntegratedControl:
         print("\nREMEMBER: Y must be NEGATIVE (negative = forward from base)")
         print("="*50)
     
-    def show_examples(self):
-        """Show example inputs."""
-        print("\nEXAMPLE INPUTS:")
-        print("  Position only (3 values):")
-        print("    0.0 -0.3 0.2     ← Forward center")
-        print("    0.15 -0.2 0.15   ← Right side")
-        print("    -0.1 -0.25 0.18  ← Left forward")
-        print()
-        print("  Full pose (6 values):")
-        print("    0.0 -0.25 0.18 0 45 0    ← Forward with pitch")
-        print("    0.1 -0.2 0.15 0 0 90     ← Right with wrist rotation")
-        print()
-
     def show_commands(self):
         """Show all available commands."""
         print("\n" + "="*50)
@@ -251,89 +233,10 @@ class SO100IntegratedControl:
         except Exception as e:
             print(f"  Could not get current state: {e}")
     
-    def move_to_pose(self, target_input: str) -> bool:
-        """
-        Process pose input and move robot.
-        
-        Args:
-            target_input: Space-separated pose values
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Parse input
-            values = [float(x) for x in target_input.split()]
-            
-            if len(values) == 3:
-                # Position only
-                target_pos = values
-                print(f"\n🎯 Target position: [{target_pos[0]:.3f}, {target_pos[1]:.3f}, {target_pos[2]:.3f}] m")
-                print("Solving position-only IK...")
-                
-                joint_angles, success = self.ik_solver.solve_ik_position_only(target_pos)
-                
-            elif len(values) == 6:
-                # Full pose
-                target_pos = values[:3]
-                target_rot_deg = values[3:]
-                target_rot_rad = np.deg2rad(target_rot_deg)
-                
-                print(f"\n🎯 Target position: [{target_pos[0]:.3f}, {target_pos[1]:.3f}, {target_pos[2]:.3f}] m")
-                print(f"🎯 Target rotation: [{target_rot_deg[0]:.1f}, {target_rot_deg[1]:.1f}, {target_rot_deg[2]:.1f}] deg")
-                print("Solving full pose IK...")
-                
-                # Try full pose first
-                joint_angles, success = self.ik_solver.solve_ik(target_pos, target_rot_rad)
-                
-                if not success:
-                    print("⚠️  Full pose IK failed, trying position-only...")
-                    joint_angles, success = self.ik_solver.solve_ik_position_only(target_pos)
-                    
-            else:
-                print("❌ Error: Please provide 3 values (x y z) or 6 values (x y z rx ry rz)")
-                return False
-            
-            if success:
-                print("✅ IK Solution found!")
-                
-                # Display joint angles
-                print("Joint angles computed:")
-                for i, (name, angle) in enumerate(zip(self.ik_solver.joint_names, joint_angles)):
-                    print(f"  {name}: {np.degrees(angle):.2f}°")
-                
-                # Apply to simulation
-                print("\n🤖 Moving robot...")
-                self.sim.set_joint_angles(joint_angles)
-                
-                # Wait a moment for movement
-                time.sleep(1)
-                
-                # Verify final position
-                final_pos = self.sim.get_end_effector_position()
-                if len(values) >= 3:
-                    error = np.linalg.norm(np.array(values[:3]) - final_pos)
-                    print(f"✓ Movement complete!")
-                    print(f"  Final position: [{final_pos[0]:.3f}, {final_pos[1]:.3f}, {final_pos[2]:.3f}] m")
-                    print(f"  Position error: {error:.4f} m")
-                
-                return True
-                
-            else:
-                print("❌ IK failed to converge - target may be outside workspace")
-                return False
-                
-        except ValueError:
-            print("❌ Invalid input. Please enter numbers separated by spaces.")
-            return False
-        except Exception as e:
-            print(f"❌ An error occurred: {e}")
-            return False
-    
     def run(self):
         """Main control loop."""
         self.show_workspace_info()
-        self.show_examples()
+        # (IK feature removed) show_examples() deleted
         self.get_current_pose()
         self.show_commands()
 
@@ -351,8 +254,6 @@ class SO100IntegratedControl:
                     break
                 elif user_input.lower() == 'current':
                     self.get_current_pose()
-                elif user_input.lower() == 'examples':
-                    self.show_examples()
                 elif user_input.lower() == 'workspace':
                     self.show_workspace_info()
                 elif user_input.lower() == 'commands':
@@ -367,7 +268,7 @@ class SO100IntegratedControl:
                         print("⚠️  Stopping mirroring for manual control...")
                         self.stop_mirroring()
                         time.sleep(0.5)
-                    self.move_to_pose(user_input)
+                    # (IK feature removed) move_to_pose(user_input) deleted
                 
         except KeyboardInterrupt:
             print("\n\nShutting down system...")
