@@ -10,6 +10,13 @@ from pydantic import BaseModel
 
 from phosphobot.models import StatusResponse
 
+# Try to load .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load .env file if it exists
+except ImportError:
+    pass  # dotenv not installed, that's okay
+
 router = APIRouter(tags=["kinematics"])
 
 # Global variable to track the AI-kinematics subprocess
@@ -76,8 +83,15 @@ async def launch_kinematics(
         # Ensure GUI applications can access the display
         if "DISPLAY" not in env:
             env["DISPLAY"] = ":0"
-        # Set Anthropic API key for AI features
-        env["ANTHROPIC_API_KEY"] = "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"  # Replace with actual key
+        # Set Anthropic API key for AI features (from environment)
+        if "ANTHROPIC_API_KEY" not in env:
+            # Try to get from environment or use a default message
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if api_key:
+                env["ANTHROPIC_API_KEY"] = api_key
+            else:
+                # For development, you can set this in your shell or .env file
+                print("Warning: ANTHROPIC_API_KEY not found in environment")
         
         kinematics_process = subprocess.Popen(
             cmd,
