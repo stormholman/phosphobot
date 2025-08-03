@@ -34,7 +34,7 @@ class VisionAnalyzer:
                 # Try to load from config file
                 from config import get_config
                 config = get_config()
-                api_key = config.get('anthropic_api_key', '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')
+                api_key = config.get('anthropic_api_key', '')
                 if api_key:
                     os.environ['ANTHROPIC_API_KEY'] = api_key
                     print("[Vision] API key loaded from config")
