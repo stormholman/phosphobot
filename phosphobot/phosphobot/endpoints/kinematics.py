@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import os
 from pathlib import Path
 from typing import Optional, Literal
 
@@ -22,8 +23,38 @@ router = APIRouter(tags=["kinematics"])
 # Global variable to track the AI-kinematics subprocess
 kinematics_process: Optional[subprocess.Popen[str]] = None
 
+# Global variable to store API key in memory
+_anthropic_api_key: Optional[str] = None
+
 class AITaskRequest(BaseModel):
     task: str
+
+class ApiKeyRequest(BaseModel):
+    api_key: str
+
+@router.post("/kinematics/set-api-key", response_model=StatusResponse)
+async def set_api_key(request: ApiKeyRequest) -> StatusResponse:
+    """Set the Anthropic API key for AI vision features."""
+    global _anthropic_api_key
+    
+    if not request.api_key or not request.api_key.strip():
+        raise HTTPException(status_code=400, detail="API key cannot be empty")
+    
+    # Basic validation for Anthropic API key format
+    api_key = request.api_key.strip()
+    if not api_key.startswith('sk-ant-'):
+        raise HTTPException(status_code=400, detail="Invalid Anthropic API key format")
+    
+    _anthropic_api_key = api_key
+    logger.info("Anthropic API key has been set for AI-kinematics")
+    
+    return StatusResponse(status="ok", message="API key set successfully")
+
+@router.get("/kinematics/api-key-status", response_model=dict)
+async def get_api_key_status() -> dict:
+    """Check if API key is set."""
+    global _anthropic_api_key
+    return {"api_key_set": _anthropic_api_key is not None and len(_anthropic_api_key) > 0}
 
 @router.post("/kinematics/launch", response_model=StatusResponse)
 async def launch_kinematics(
@@ -37,7 +68,7 @@ async def launch_kinematics(
     command line arguments for non-interactive operation.
     """
 
-    global kinematics_process
+    global kinematics_process, _anthropic_api_key
 
     # Prevent double-launch
     if kinematics_process is not None and kinematics_process.poll() is None:
@@ -46,6 +77,10 @@ async def launch_kinematics(
     # Clean up any finished process handle
     if kinematics_process is not None:
         kinematics_process = None
+
+    # Check API key for AI mode
+    if mode == "ai" and (_anthropic_api_key is None or not _anthropic_api_key.strip()):
+        raise HTTPException(status_code=400, detail="Anthropic API key is required for AI mode. Please set it first.")
 
     # Get task description for AI mode
     task_description = "red cup"  # default
@@ -78,20 +113,18 @@ async def launch_kinematics(
             cmd.append(task_description)  # use user-provided or default task
 
         # Spawn the process with proper error capture
-        import os
         env = os.environ.copy()
         # Ensure GUI applications can access the display
         if "DISPLAY" not in env:
             env["DISPLAY"] = ":0"
-        # Set Anthropic API key for AI features (from environment)
-        if "ANTHROPIC_API_KEY" not in env:
-            # Try to get from environment or use a default message
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if api_key:
-                env["ANTHROPIC_API_KEY"] = api_key
-            else:
-                # For development, you can set this in your shell or .env file
-                print("Warning: ANTHROPIC_API_KEY not found in environment")
+        
+        # Set Anthropic API key for AI features
+        if mode == "ai" and _anthropic_api_key:
+            env["ANTHROPIC_API_KEY"] = _anthropic_api_key
+            logger.info("API key passed to kinematics subprocess")
+        elif mode == "ai":
+            # This should not happen due to the check above, but just in case
+            raise HTTPException(status_code=400, detail="API key not available for AI mode")
         
         kinematics_process = subprocess.Popen(
             cmd,

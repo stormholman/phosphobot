@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Play, Square, RefreshCw } from "lucide-react";
+import { Play, Square, RefreshCw, Eye, EyeOff, Key } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SimulationStatus {
@@ -25,6 +25,12 @@ const SimulationPage: React.FC = () => {
   const [isKinematicsLoading, setIsKinematicsLoading] = useState(false);
   const [kinematicsError, setKinematicsError] = useState<string | null>(null);
   const [aiTask, setAiTask] = useState<string>("red cup"); // AI task input state
+  
+  // API Key management state
+  const [apiKey, setApiKey] = useState<string>("");
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [apiKeySet, setApiKeySet] = useState<boolean>(false);
+  const [isSettingApiKey, setIsSettingApiKey] = useState<boolean>(false);
 
   const checkSimulationStatus = async () => {
     console.log("🔍 Checking simulation status...");
@@ -108,6 +114,56 @@ const SimulationPage: React.FC = () => {
     }
   };
 
+  /* ======================  API KEY MANAGEMENT  ====================== */
+  const setAnthropicApiKey = async () => {
+    if (!apiKey.trim()) {
+      setKinematicsError("Please enter a valid API key");
+      return;
+    }
+
+    setIsSettingApiKey(true);
+    setKinematicsError(null);
+    try {
+      const response = await fetch("http://localhost:80/kinematics/set-api-key", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ api_key: apiKey.trim() }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("📊 API key response:", data);
+      setApiKeySet(true);
+      setKinematicsError(null);
+      
+      // Clear the input for security
+      setApiKey("");
+      setShowApiKey(false);
+    } catch (err) {
+      console.error("❌ Failed to set API key:", err);
+      setKinematicsError(`Failed to set API key: ${err}`);
+    } finally {
+      setIsSettingApiKey(false);
+    }
+  };
+
+  const checkApiKeyStatus = async () => {
+    try {
+      const response = await fetch("http://localhost:80/kinematics/api-key-status");
+      if (response.ok) {
+        const data = await response.json();
+        setApiKeySet(data.api_key_set || false);
+      }
+    } catch (err) {
+      console.error("Failed to check API key status:", err);
+    }
+  };
+
   /* ======================  KINEMATICS API  ====================== */
   const checkKinematicsStatus = async () => {
     console.log("🔍 Checking kinematics status...");
@@ -127,6 +183,12 @@ const SimulationPage: React.FC = () => {
 
   const launchKinematics = async (mode: "manual" | "ai") => {
     console.log(`🚀 Launch kinematics (${mode}) button clicked`);
+    
+    // Check API key for AI mode
+    if (mode === "ai" && !apiKeySet) {
+      setKinematicsError("Please set your Anthropic API key first for AI mode");
+      return;
+    }
     
     // Validate AI task input for AI mode
     if (mode === "ai" && !aiTask.trim()) {
@@ -190,6 +252,7 @@ const SimulationPage: React.FC = () => {
     console.log("🎬 SimulationPage component mounted – checking both statuses");
     checkSimulationStatus();
     checkKinematicsStatus();
+    checkApiKeyStatus();
   }, []);
 
   const isRunning = simulationStatus?.message?.toLowerCase().includes("running") && 
@@ -310,6 +373,91 @@ const SimulationPage: React.FC = () => {
           {/* -------------- Kinematics Tab -------------- */}
           <TabsContent value="kinematics">
             <div className="grid gap-6">
+              {/* API Key Configuration Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key className="h-5 w-5" />
+                    API Configuration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm font-medium">Anthropic API Key Status:</span>
+                    <Badge variant={apiKeySet ? "default" : "secondary"}>
+                      {apiKeySet ? "✓ Set" : "Not Set"}
+                    </Badge>
+                  </div>
+                  
+                  {!apiKeySet && (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="api-key" className="text-sm font-medium">
+                          Anthropic API Key
+                        </Label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Input
+                              id="api-key"
+                              type={showApiKey ? "text" : "password"}
+                              placeholder="sk-ant-..."
+                              value={apiKey}
+                              onChange={(e) => setApiKey(e.target.value)}
+                              className="pr-10"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowApiKey(!showApiKey)}
+                            >
+                              {showApiKey ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                          <Button
+                            onClick={setAnthropicApiKey}
+                            disabled={isSettingApiKey || !apiKey.trim()}
+                            className="flex items-center gap-2"
+                          >
+                            <Key className="h-4 w-4" />
+                            {isSettingApiKey ? "Setting..." : "Set Key"}
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Required for AI vision features. Get your API key from{" "}
+                        <a 
+                          href="https://console.anthropic.com/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Anthropic Console
+                        </a>
+                      </p>
+                    </div>
+                  )}
+                  
+                  {apiKeySet && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-green-600">✓ API key is configured and ready for AI features</span>
+                      <Button
+                        onClick={() => setApiKeySet(false)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Update Key
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -353,11 +501,11 @@ const SimulationPage: React.FC = () => {
                     </Button>
                     <Button
                       onClick={() => launchKinematics("ai")}
-                      disabled={isKinematicsLoading || isKinematicsRunning}
+                      disabled={isKinematicsLoading || isKinematicsRunning || !apiKeySet}
                       className="flex items-center gap-2"
                     >
                       <Play className="h-4 w-4" />
-                      AI Target
+                      AI Target {!apiKeySet && "(Requires API Key)"}
                     </Button>
                     <Button
                       onClick={stopKinematics}
