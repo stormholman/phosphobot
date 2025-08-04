@@ -3,6 +3,7 @@ import cv2
 from rgbd_feed import DemoApp
 from vision_analyzer import VisionAnalyzer
 import requests
+import os
 
 class KinematicsApp(DemoApp):
     def __init__(self):
@@ -15,7 +16,17 @@ class KinematicsApp(DemoApp):
         self.non_interactive = False
         
         # Vision analyzer for AI-powered object detection
+        print("[DEBUG] Initializing VisionAnalyzer...")
         self.vision_analyzer = VisionAnalyzer()
+        print(f"[DEBUG] VisionAnalyzer initialized. Available: {self.vision_analyzer.is_available()}")
+        
+        # Check API key status
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        if api_key:
+            print(f"[DEBUG] API key found in environment: {api_key[:10]}...")
+        else:
+            print("[DEBUG] No API key found in environment")
+            
         self.vision_mode = False
         self.vision_result = None
         self.vision_target_description = ""
@@ -747,11 +758,19 @@ class KinematicsApp(DemoApp):
             # Auto-analyze first frame in AI mode (AFTER ArUco detection is done)
             if mode == 'ai' and not first_frame_processed and self.vision_target_description and self.rgb_intrinsic_mat is not None:
                 print("🔍 Analyzing first frame with AI...")
+                print(f"[DEBUG] Vision analyzer available: {self.vision_analyzer.is_available()}")
+                print(f"[DEBUG] Current RGB frame shape: {self.current_rgb.shape if self.current_rgb is not None else 'None'}")
+                print(f"[DEBUG] Target description: '{self.vision_target_description}'")
+                
                 result = self.vision_analyzer.analyze_image(self.current_rgb, self.vision_target_description, self.depth)
+                
+                print(f"[DEBUG] Vision analysis result: {result}")
                 
                 if result and result.get('success'):
                     self.vision_result = result
                     x, y = result['target_pixel']
+                    
+                    print(f"[DEBUG] Target pixel found: ({x}, {y})")
                     
                     # Scale coordinates from RGB to depth frame if needed
                     rgb_height, rgb_width = self.current_rgb.shape[:2]
@@ -771,6 +790,8 @@ class KinematicsApp(DemoApp):
                     # Get depth and calculate 3D position
                     if 0 <= depth_y < self.depth.shape[0] and 0 <= depth_x < self.depth.shape[1]:
                         depth_value = float(self.depth[depth_y, depth_x])
+                        print(f"[DEBUG] Depth at target: {depth_value}")
+                        
                         if depth_value > 0:
                             # Use original RGB coordinates for 3D calculation (intrinsics are for RGB)
                             pos_3d = self.pixel_to_3d_position(x, y, depth_value, self.rgb_intrinsic_mat)
@@ -810,6 +831,8 @@ class KinematicsApp(DemoApp):
                     print("❌ AI could not find the target object")
                     if result:
                         print(f"Reason: {result.get('reasoning', 'Unknown')}")
+                    else:
+                        print("No result returned from vision analyzer")
                 
                 first_frame_processed = True
 

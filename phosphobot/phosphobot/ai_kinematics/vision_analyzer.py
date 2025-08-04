@@ -27,20 +27,33 @@ class VisionAnalyzer:
         
     def setup_api_key(self):
         """Set up Anthropic API key"""
+        print("[DEBUG] Setting up API key...")
         api_key = os.getenv('ANTHROPIC_API_KEY')
         
         if not api_key:
             # Non-interactive mode (subprocess) - don't prompt, just warn
             print("[Vision] Warning: No API key found. AI vision features will not work.")
             print("[Vision] Set ANTHROPIC_API_KEY environment variable to enable AI features.")
+            print("[DEBUG] No API key in environment - vision features disabled")
             return
-        
+        else:
+            print(f"[DEBUG] API key found: {api_key[:10]}...")
+            print(f"[DEBUG] API key length: {len(api_key)}")
+            print(f"[DEBUG] API key format check: starts with 'sk-ant-' = {api_key.startswith('sk-ant-')}")
+            
         # Initialize client
         try:
+            print(f"[DEBUG] Creating Anthropic client with API key: {api_key[:20]}...")
             self.client = anthropic.Anthropic(api_key=api_key)
             print("[Vision] Claude client initialized successfully")
+            print("[DEBUG] Anthropic client created successfully")
+            print(f"[DEBUG] Client API key (first 20 chars): {self.client.api_key[:20]}...")
+            print(f"[DEBUG] Client API key (last 10 chars): ...{self.client.api_key[-10:]}")
+            print(f"[DEBUG] Client API key length: {len(self.client.api_key)}")
+            print(f"[DEBUG] Client API key matches input: {self.client.api_key == api_key}")
         except Exception as e:
             print(f"[Vision] Error initializing Claude client: {e}")
+            print(f"[DEBUG] Failed to create Anthropic client: {e}")
             self.client = None
     
     def opencv_to_pil(self, cv_image: np.ndarray) -> Image.Image:
@@ -128,8 +141,13 @@ class VisionAnalyzer:
         Returns:
             Dictionary with analysis results or None if failed
         """
+        print(f"[DEBUG] Starting image analysis for: '{target_description}'")
+        print(f"[DEBUG] Image shape: {rgb_image.shape}")
+        print(f"[DEBUG] Client available: {self.client is not None}")
+        
         if self.client is None:
             print("[Vision] Error: Claude client not initialized")
+            print("[DEBUG] Cannot analyze - no client available")
             return None
         
         try:
@@ -151,7 +169,9 @@ class VisionAnalyzer:
                 scaled_width, scaled_height = img_width, img_height
             
             # Convert image to base64
+            print("[DEBUG] Converting image to base64...")
             base64_image = self.image_to_base64(rgb_for_analysis)
+            print(f"[DEBUG] Base64 image length: {len(base64_image)}")
             
             # Create improved system prompt with precision emphasis
             system_prompt = f"""You are a Vision-Language-Action model for robotic manipulation with RGBD cameras.
@@ -214,18 +234,25 @@ class VisionAnalyzer:
             }
             
             print(f"[Vision] Sending request to Claude for: '{target_description}'")
+            print("[DEBUG] Making API call to Anthropic...")
+            print(f"[DEBUG] Using model: claude-sonnet-4-20250514")
+            print(f"[DEBUG] Max tokens: 1000")
+            print(f"[DEBUG] Client API key check: {self.client.api_key[:10]}...")
+            print(f"[DEBUG] Client API key full: {self.client.api_key}")
             
-            # Call Claude API
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",  # Updated model
+                model="claude-sonnet-4-20250514",
                 max_tokens=1000,
                 system=system_prompt,
                 messages=[message]
             )
             
+            print("[DEBUG] API call completed successfully")
+            
             # Parse response
             response_text = response.content[0].text.strip()
             print(f"[Vision] Claude response received")
+            print(f"[DEBUG] Response length: {len(response_text)}")
             
             # Extract JSON from response
             json_start = response_text.find('{')
@@ -234,8 +261,10 @@ class VisionAnalyzer:
             if json_start >= 0 and json_end > json_start:
                 json_text = response_text[json_start:json_end]
                 result = json.loads(json_text)
+                print(f"[DEBUG] JSON parsed successfully: {result.get('success', 'unknown')}")
             else:
                 print("[Vision] No valid JSON found in response")
+                print(f"[DEBUG] Raw response: {response_text[:200]}...")
                 return None
             
             # Validate and process result
@@ -291,6 +320,7 @@ class VisionAnalyzer:
             return None
         except Exception as e:
             print(f"[Vision] Analysis error: {e}")
+            print(f"[DEBUG] Exception during analysis: {e}")
             import traceback
             traceback.print_exc()
             return None
