@@ -11,6 +11,9 @@ class KinematicsApp(DemoApp):
         self.depth_intrinsic_mat = None  # Depth camera intrinsics
         self.rgb_intrinsic_mat = None    # RGB camera intrinsics
         
+        # Non-interactive mode flag
+        self.non_interactive = False
+        
         # Vision analyzer for AI-powered object detection
         self.vision_analyzer = VisionAnalyzer()
         self.vision_mode = False
@@ -147,7 +150,7 @@ class KinematicsApp(DemoApp):
         
         return rx_cm, ry_cm, rz_cm
 
-    def prompt_and_move_robot(self, rel_coords):
+    def prompt_and_move_robot(self, rel_coords, auto_confirm=False):
         """Ask user for confirmation and move robot (convert to robot frame)"""
         rx_cm, ry_cm, rz_cm = self.convert_to_robot_frame(rel_coords)
         print(f"\n🛰  Debug (ArUco frame m): X={rel_coords[0]:.3f}  Y={rel_coords[1]:.3f}  Z={rel_coords[2]:.3f}")
@@ -161,11 +164,22 @@ class KinematicsApp(DemoApp):
             f"  \"x\": {rx_cm:.1f},\\n  \"y\": {ry_cm:.1f},\\n  \"z\": {rz_cm:.1f},\\n  \"open\": 0,\\n  \"max_trials\": 100,\\n  \"position_tolerance\": 0.03,\\n  \"orientation_tolerance\": 0.2\\n}}'"
         )
         print("\n🛰  Proposed robot move command:\n" + preview_curl)
-        try:
-            answer = input("\n🤖 Send this command? (y/n): ").strip().lower()
-            if answer != 'y':
-                print("🚫 Move cancelled")
+        
+        # Auto-confirm in non-interactive mode
+        if self.non_interactive:
+            print("🤖 Auto-confirming robot move (non-interactive mode)")
+            answer = 'y'
+        else:
+            try:
+                answer = input("\n🤖 Send this command? (y/n): ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("🚫 Move cancelled (no input available)")
                 return
+        
+        if answer != 'y':
+            print("🚫 Move cancelled")
+            return
+        try:
             payload = {
                 "x": rx_cm,
                 "y": ry_cm,
@@ -354,6 +368,11 @@ class KinematicsApp(DemoApp):
     
     def get_3d_position_from_input(self):
         """Get 3D position from user input of pixel coordinates"""
+        # Skip interactive input in non-interactive mode
+        if self.non_interactive:
+            print("❌ Manual coordinate input not available in non-interactive mode")
+            return None
+            
         try:
             u = int(input("Enter u (x) pixel coordinate: "))
             v = int(input("Enter v (y) pixel coordinate: "))
@@ -394,6 +413,11 @@ class KinematicsApp(DemoApp):
     
     def get_vision_target(self):
         """Get target description from user for vision-based selection (HYBRID mode)"""
+        # Skip interactive input in non-interactive mode
+        if self.non_interactive:
+            print("❌ Vision target selection not available in non-interactive mode")
+            return False
+            
         try:
             print("\n" + "="*60)
             print("🤖 AI VISION ANALYSIS (HYBRID MODE)")
@@ -439,18 +463,22 @@ class KinematicsApp(DemoApp):
                 rgb_height, rgb_width = self.current_rgb.shape[:2]
                 depth_height, depth_width = self.depth.shape[:2]
                 
+                # Scale coordinates if RGB and depth have different dimensions
                 if rgb_width != depth_width or rgb_height != depth_height:
                     scale_x = depth_width / rgb_width
                     scale_y = depth_height / rgb_height
                     depth_x = int(x * scale_x)
                     depth_y = int(y * scale_y)
+                    print(f"🔄 Scaling coordinates: RGB({x},{y}) -> Depth({depth_x},{depth_y})")
+                    print(f"   RGB: {rgb_width}x{rgb_height}, Depth: {depth_width}x{depth_height}")
                 else:
                     depth_x, depth_y = x, y
                 
                 # Get depth and calculate 3D position
                 if 0 <= depth_y < self.depth.shape[0] and 0 <= depth_x < self.depth.shape[1]:
                     depth_value = float(self.depth[depth_y, depth_x])
-                    if depth_value > 0 and self.rgb_intrinsic_mat is not None:
+                    if depth_value > 0:
+                        # Use original RGB coordinates for 3D calculation (intrinsics are for RGB)
                         pos_3d = self.pixel_to_3d_position(x, y, depth_value, self.rgb_intrinsic_mat)
                         if pos_3d:
                             X, Y, Z = pos_3d
@@ -572,6 +600,13 @@ class KinematicsApp(DemoApp):
     
     def get_ai_task(self):
         """Get AI task description from user"""
+        # In non-interactive mode, return existing task or default
+        if self.non_interactive:
+            if self.vision_target_description:
+                return self.vision_target_description
+            else:
+                return "red cup"  # Default task
+        
         print("\n" + "="*60)
         print("AI VISION TASK INPUT")
         print("="*60)
@@ -606,16 +641,17 @@ class KinematicsApp(DemoApp):
             print("\n\n❌ Task input cancelled")
             return None
 
-    def start_processing_stream(self):
+    def start_processing_stream(self, mode=None):
         """Override to store intrinsic matrix and add input option"""
-        # Get operating mode from user
-        mode = self.select_operating_mode()
+        # Get operating mode from user (only if not provided)
+        if mode is None:
+            mode = self.select_operating_mode()
         
         if mode == 'exit':
             return
         
-        # If AI mode, get task description
-        if mode == 'ai':
+        # If AI mode, get task description (only if not already set)
+        if mode == 'ai' and not self.vision_target_description:
             task_description = self.get_ai_task()
             if not task_description:
                 print("No task provided. Switching to manual mode.")
@@ -1309,10 +1345,12 @@ def main():
         mode_arg = sys.argv[1].lower()
         if mode_arg in ['manual', '1']:
             app.vision_mode = False
+            app.non_interactive = True  # Set non-interactive flag
             mode = 'manual'
             print("🎯 MANUAL MODE (non-interactive)")
         elif mode_arg in ['ai', '2']:
             app.vision_mode = True
+            app.non_interactive = True  # Set non-interactive flag
             mode = 'ai'
             # Set a default task for AI mode when run non-interactively
             app.vision_target_description = "red cup" if len(sys.argv) < 3 else " ".join(sys.argv[2:])
@@ -1327,13 +1365,8 @@ def main():
             app.connect_to_device(dev_idx=0)
             print("✅ Connected to Record3D device successfully")
 
-            # Monkey-patch interactive methods so start_processing_stream runs non-interactively
-            app.select_operating_mode = lambda: mode  # type: ignore
-            if mode == 'ai':
-                # get_ai_task should return the pre-set task description without prompting
-                app.get_ai_task = lambda: app.vision_target_description  # type: ignore
-
-            app.start_processing_stream()
+            # Start processing with the specified mode (no interactive prompts)
+            app.start_processing_stream(mode)
         except RuntimeError as e:
             print(f"❌ Device connection error: {e}")
             print("💡 Make sure:")
