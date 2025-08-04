@@ -443,6 +443,18 @@ class KinematicsApp(DemoApp):
                 cv2.putText(rgb, target_text, (10, rgb.shape[0] - 40), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
+            if self.last_mouse_pos and self.depth_value is not None:
+                rgb_x, rgb_y = self.last_mouse_pos
+                
+                # Add crosshair to RGB view
+                color_rgb = (0, 255, 0) if self.vision_mode else (255, 255, 255)
+                if self.vision_mode:
+                    cv2.line(rgb, (rgb_x - 15, rgb_y), (rgb_x + 15, rgb_y), color_rgb, 2)
+                    cv2.line(rgb, (rgb_x, rgb_y - 15), (rgb_x, rgb_y + 15), color_rgb, 2)
+                    cv2.circle(rgb, (rgb_x, rgb_y), 10, color_rgb, 2)
+                else:
+                    cv2.circle(rgb, (rgb_x, rgb_y), 5, color_rgb, -1)
+
             cv2.imshow('RGB', rgb)
 
             depth_vis = depth.copy()
