@@ -1,6 +1,6 @@
 # Kinematics AI
 
-A computer vision and robotics system that combines RGBD cameras, ArUco marker tracking, and AI-powered object detection for precise robotic manipulation.
+A computer vision and robotics system that combines RGBD cameras, ArUco marker tracking, and AI-powered object detection for precise robotic manipulation. Designed for non-interactive operation with web application integration.
 
 ## Features
 
@@ -9,7 +9,9 @@ A computer vision and robotics system that combines RGBD cameras, ArUco marker t
 - **AI Vision Analysis**: Claude-powered object detection with natural language descriptions
 - **3D Coordinate Transformation**: Pixel → Camera → ArUco Marker → Robot coordinate conversion
 - **Robot Control**: HTTP API integration for robotic arm movement
-- **Multiple Operation Modes**: Manual, AI Vision, and Hybrid modes
+- **Non-Interactive Operation**: Designed for web application integration without user prompts
+- **Multiple Operation Modes**: Manual and AI Vision modes
+- **Web API Integration**: Remote control via phosphobot framework endpoints
 
 ## System Architecture
 
@@ -47,6 +49,7 @@ pip install -r requirements.txt
 
 ## Quick Start
 
+### Direct Launch
 1. **Setup ArUco Marker**
    ```bash
    python generate_aruco.py --id 0 --size 200 --output marker_0.png
@@ -62,29 +65,100 @@ pip install -r requirements.txt
 
 4. **Run the Application**
 ```bash
-python main.py
+# Manual mode
+python main.py manual
+
+# AI mode with default task
+python main.py ai
+
+# AI mode with custom task
+python main.py ai "red cup"
 ```
+
+### Web API Control
+The AI kinematics system can be controlled remotely through the phosphobot web interface:
+
+- **Set API Key**: `POST /kinematics/set-api-key`
+- **Check API Key Status**: `GET /kinematics/api-key-status`
+- **Launch Kinematics**: `POST /kinematics/launch?mode=manual|ai`
+- **Stop Kinematics**: `POST /kinematics/stop`
+- **Check Status**: `GET /kinematics/status`
+
+The web API automatically handles process management, API key management, and provides real-time status feedback.
+
+## Web API Integration
+
+The AI kinematics system integrates with the phosphobot web framework through REST API endpoints:
+
+### Available Endpoints
+
+#### API Key Management
+- **`POST /kinematics/set-api-key`** - Set Anthropic API key for AI features
+  - Body: `{"api_key": "sk-ant-api03-..."}`
+  - Returns: Status confirmation
+  - Validation: Checks for valid Anthropic API key format
+
+- **`GET /kinematics/api-key-status`** - Check if API key is configured
+  - Returns: `{"api_key_set": true/false}`
+  - Used by frontend to enable/disable AI mode
+
+#### Process Control
+- **`POST /kinematics/launch`** - Launch AI kinematics process
+  - Query params: `mode=manual|ai`
+  - Body (optional): `{"task": "object description"}` for AI mode
+  - Returns: Status confirmation with process PID
+  - Background: Launches `python main.py <mode> [task]` in ai_kinematics directory
+
+- **`POST /kinematics/stop`** - Stop running kinematics process
+  - Returns: Status confirmation
+  - Process: Graceful termination with 5-second timeout
+
+- **`GET /kinematics/status`** - Check kinematics process status
+  - Returns: Current status (running/stopped) with PID if active
+
+### API Response Format
+```json
+{
+  "status": "ok",
+  "message": "AI-kinematics launched in ai mode"
+}
+```
+
+### Error Handling
+- **Already running**: Returns 400 if kinematics process is already active
+- **Missing API key**: Returns 400 if AI mode requested without API key
+- **Invalid API key**: Returns 400 for malformed Anthropic API keys
+- **Process not found**: Returns 500 if main.py script is missing
+- **Launch failure**: Returns 500 with detailed error information
+- **Device connection**: Returns 500 with Record3D connection troubleshooting
+
+### Integration with phosphobot
+The kinematics endpoints are automatically registered with the main phosphobot FastAPI application and can be accessed through the web dashboard. The system supports:
+
+- **Non-interactive operation**: No user prompts or confirmations
+- **Automatic API key management**: Secure in-memory storage
+- **Process lifecycle management**: Automatic cleanup and error recovery
+- **Real-time status monitoring**: Process state tracking
+- **Debug output streaming**: All logs visible in web application console
 
 ## Operation Modes
 
 ### Manual Mode
 - Mouse hover shows real-time 3D coordinates
-- Left-click sends coordinates to robot
+- Left-click sends coordinates to robot automatically
+- No user confirmation required
 - Precise manual control
 
 ### AI Vision Mode  
 - Describe objects in natural language
 - AI automatically finds and targets objects
+- First frame is analyzed automatically
 - Examples: "yellow banana", "red cup on table"
-
-### Hybrid Mode
-- Switch between manual and AI modes
-- Press 'v' for AI analysis, 'm' to toggle modes
 
 ## Key Components
 
 ### `main.py`
-Main application with RGBD processing, ArUco detection, and robot control.
+Main application with RGBD processing, ArUco detection, and robot control. Non-interactive operation only.
 
 ### `vision_analyzer.py`  
 AI-powered object detection using Claude vision API with accuracy improvements:
@@ -137,35 +211,60 @@ self.aruco_marker_size = 0.04      # 4cm physical size
 ### Camera Calibration
 Automatic calibration from Record3D intrinsics. Manual override available in code.
 
+### Web API Settings
+The kinematics endpoints are configured in `phosphobot/endpoints/kinematics.py`:
+- Process timeout: 5 seconds for graceful shutdown
+- Working directory: ai_kinematics folder
+- Command: `python main.py <mode> [task]`
+- API key storage: In-memory with validation
+
 ## Usage Examples
 
 ### Manual Targeting
-1. Start application in Manual mode
+1. Start application: `python main.py manual`
 2. Hover mouse over objects to see 3D coordinates
-3. Left-click to send coordinates to robot
-4. Confirm robot movement when prompted
+3. Left-click to send coordinates to robot automatically
+4. Robot movement is confirmed automatically
 
 ### AI Object Detection
-1. Start application in AI Vision mode
-2. Describe target: "pick up the blue cup"
-3. AI analyzes frame and finds object
-4. Coordinates automatically sent to robot
+1. Start application: `python main.py ai "red cup"`
+2. AI analyzes first frame and finds object
+3. Coordinates automatically sent to robot
+4. No user interaction required
 
-### Hybrid Workflow
-1. Start in Hybrid mode
-2. Use manual mode for precise positioning
-3. Press 'v' to switch to AI for object recognition
-4. Press 'm' to toggle between modes
+### Web API Usage
+```bash
+# Set API key
+curl -X POST "http://localhost:8000/kinematics/set-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "sk-ant-api03-..."}'
+
+# Launch AI mode
+curl -X POST "http://localhost:8000/kinematics/launch?mode=ai" \
+  -H "Content-Type: application/json" \
+  -d '{"task": "red cup"}'
+
+# Check status
+curl "http://localhost:8000/kinematics/status"
+
+# Stop process
+curl -X POST "http://localhost:8000/kinematics/stop"
+```
 
 ## Keyboard Controls
 
 - `q` - Quit application
-- `p` - Manual coordinate input (Manual/Hybrid mode)
-- `v` - AI vision analysis (Hybrid mode)
-- `m` - Toggle manual/AI modes (Hybrid mode)
-- `r` - Re-analyze with new task (AI mode)
-- `c` - Clear AI target (Hybrid mode)
-- `+/-` - Adjust ArUco marker size for debugging
+
+## Web Application Integration
+
+The system is designed to work with web applications through the phosphobot framework:
+
+- **Non-interactive operation**: No user prompts or confirmations
+- **Command-line arguments**: Mode and task specified at startup
+- **Automatic robot movement**: No manual confirmation required
+- **Debug output**: All logs visible in web application console
+- **API key management**: Secure storage and validation
+- **Process lifecycle**: Automatic startup, monitoring, and cleanup
 
 ## Troubleshooting
 
@@ -173,7 +272,6 @@ Automatic calibration from Record3D intrinsics. Manual override available in cod
 - Ensure good lighting and contrast
 - Check marker is 4x4cm and ID 0
 - Verify marker is DICT_ARUCO_ORIGINAL type
-- Try adjusting marker size with +/- keys
 
 ### Depth Accuracy
 - Ensure RGB and depth frames are aligned
@@ -184,13 +282,30 @@ Automatic calibration from Record3D intrinsics. Manual override available in cod
 - Use specific object descriptions
 - Ensure objects are clearly visible
 - Good lighting improves detection
-- Bounding box visualization helps debug
+- Check API key configuration
 
 ### Robot Communication
 - Verify robot endpoint URL
 - Check network connectivity
 - Confirm robot API is accessible
 - Test with curl commands
+
+### API Key Issues
+- Ensure `ANTHROPIC_API_KEY` environment variable is set
+- Verify API key is valid and has sufficient credits
+- Check network connectivity to Anthropic API
+
+### Web API Issues
+- Check phosphobot server is running
+- Verify kinematics endpoints are registered
+- Check process permissions for Python execution
+- Ensure Record3D device is connected and accessible
+
+### Process Management Issues
+- Check if kinematics process is already running
+- Verify main.py script exists in ai_kinematics directory
+- Check Python dependencies are installed
+- Monitor process logs for detailed error information
 
 ## API Reference
 
@@ -238,6 +353,45 @@ python generate_aruco.py --help
 ### Vision System Testing
 ```bash
 python vision_analyzer.py test
+```
+
+### Web Application Testing
+```bash
+# Test manual mode
+python main.py manual
+
+# Test AI mode
+python main.py ai "test object"
+```
+
+### API Endpoint Testing
+```bash
+# Test API key management
+curl -X POST "http://localhost:8000/kinematics/set-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "sk-ant-api03-..."}'
+
+# Test process launch
+curl -X POST "http://localhost:8000/kinematics/launch?mode=manual"
+
+# Test status check
+curl "http://localhost:8000/kinematics/status"
+```
+
+## Command Line Usage
+
+```bash
+# Manual mode - mouse-based targeting
+python main.py manual
+
+# AI mode with default task
+python main.py ai
+
+# AI mode with custom task
+python main.py ai "specific object description"
+
+# Show help
+python main.py
 ```
 
 ## Contributing

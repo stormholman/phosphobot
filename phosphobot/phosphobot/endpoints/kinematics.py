@@ -122,16 +122,23 @@ async def launch_kinematics(
         if mode == "ai" and _anthropic_api_key:
             env["ANTHROPIC_API_KEY"] = _anthropic_api_key
             logger.info("API key passed to kinematics subprocess")
+            logger.info(f"API key length: {len(_anthropic_api_key)}")
+            logger.info(f"API key prefix: {_anthropic_api_key[:10]}...")
         elif mode == "ai":
             # This should not happen due to the check above, but just in case
             raise HTTPException(status_code=400, detail="API key not available for AI mode")
         
+        # Debug: print environment variables being passed
+        if mode == "ai":
+            api_key_in_env = env.get("ANTHROPIC_API_KEY")
+            if api_key_in_env:
+                logger.info(f"Subprocess will receive API key: {api_key_in_env[:10]}...")
+            else:
+                logger.error("No API key found in subprocess environment!")
+        
         kinematics_process = subprocess.Popen(
             cmd,
             cwd=str(kin_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
             env=env,  # Pass the environment with DISPLAY and API key
         )
         
