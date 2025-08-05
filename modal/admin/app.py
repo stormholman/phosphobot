@@ -957,8 +957,10 @@ def fastapi_app():
                     supabase_client.table("users").update(
                         {
                             "plan": "pro",
+                            "email": supabase_user_email,
                             "stripe_customer_id": checkout_session.customer,
                             "stripe_subscription_id": checkout_session.subscription,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
                         }
                     ).eq("id", supabase_user_id).execute()
                     logger.info(f"Updated user {supabase_user_email} to pro")
@@ -967,9 +969,12 @@ def fastapi_app():
                     supabase_client.table("users").insert(
                         {
                             "id": supabase_user_id,
+                            "email": supabase_user_email,
                             "plan": "pro",
                             "stripe_customer_id": checkout_session.customer,
                             "stripe_subscription_id": checkout_session.subscription,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                            "created_at": datetime.now(timezone.utc).isoformat(),
                         }
                     ).execute()
                     logger.info(f"Created new user {supabase_user_email} with plan pro")
