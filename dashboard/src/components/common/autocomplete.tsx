@@ -122,11 +122,11 @@ export const AutoComplete = ({
       <div className="relative mt-1">
         <div
           className={cn(
-            "animate-in fade-in-0 zoom-in-95 absolute top-0 z-10 w-full rounded-xl outline-none",
+            "animate-in fade-in-0 zoom-in-95 absolute top-0 z-10 w-full outline-none",
             isOpen ? "block" : "hidden",
           )}
         >
-          <CommandList className="rounded-lg ring-1 bg-card">
+          <CommandList className="rounded-sm ring-1 bg-card text-muted-foreground shadow-md">
             {isLoading && <CommandLoading isLoading={isLoading} />}
 
             {options.length > 0 && (
@@ -174,7 +174,7 @@ export const AutoComplete = ({
             )}
 
             {!isLoading && options.length === 0 && !hasCustom && (
-              <CommandPrimitive.Empty className="select-none rounded-sm px-2 py-3 text-center text-sm">
+              <CommandPrimitive.Empty className="select-none px-2 py-3 text-center text-sm">
                 {emptyMessage}
               </CommandPrimitive.Empty>
             )}
