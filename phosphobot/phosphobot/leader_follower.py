@@ -70,12 +70,12 @@ async def leader_follower_loop(
                     )
                     await asyncio.sleep(0.05)
         else:
-            assert isinstance(
-                leader, SO100Hardware
-            ), "Gravity compensation is only supported for SO100Hardware."
-            assert isinstance(
-                follower, SO100Hardware
-            ), "Gravity compensation is only supported for SO100Hardware."
+            assert isinstance(leader, SO100Hardware), (
+                "Gravity compensation is only supported for SO100Hardware."
+            )
+            assert isinstance(follower, SO100Hardware), (
+                "Gravity compensation is only supported for SO100Hardware."
+            )
             leader_current_voltage = leader.current_voltage()
             if (
                 leader_current_voltage is None
@@ -150,12 +150,12 @@ async def leader_follower_loop(
                 )
 
             else:
-                assert isinstance(
-                    leader, SO100Hardware
-                ), "Gravity compensation is only supported for SO100Hardware."
-                assert isinstance(
-                    follower, SO100Hardware
-                ), "Gravity compensation is only supported for SO100Hardware."
+                assert isinstance(leader, SO100Hardware), (
+                    "Gravity compensation is only supported for SO100Hardware."
+                )
+                assert isinstance(follower, SO100Hardware), (
+                    "Gravity compensation is only supported for SO100Hardware."
+                )
                 # Calculate gravity compensation torque
                 # Update PyBullet simulation for gravity calculation
                 for i, idx in enumerate(joint_indices):

@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from phosphobot._version import __version__
 from phosphobot.types import VideoCodecs
@@ -887,6 +887,35 @@ class StartAIControlRequest(BaseModel):
         description="Checkpoint to use for the model. If None, uses the latest checkpoint.",
         examples=[500],
     )
+    angle_format: Literal["degrees", "radians", "other"] = Field(
+        "radians",
+        description="Format of the angles used in the model. Can be 'degrees', 'radians', or 'other'. If other is selected, you will need to specify a min and max angle value.",
+        examples=["radians"],
+    )
+    min_angle: float | None = Field(
+        None,
+        description="If angle_format is 'other', this is the minimum angle value used in the model. If None and angle_format is 'other', will raise an error.",
+    )
+    max_angle: float | None = Field(
+        None,
+        description="If angle_format is 'other', this is the maximum angle value used in the model. If None and angle_format is 'other', will raise an error.",
+    )
+
+    @model_validator(mode="after")
+    def check_angle_format(self) -> "StartAIControlRequest":
+        """
+        Validate the angle format and min/max angles if angle_format is 'other'.
+        """
+        if self.angle_format == "other":
+            if self.min_angle is None or self.max_angle is None:
+                raise ValueError(
+                    "If angle_format is 'other', min_angle and max_angle must be set."
+                )
+            if self.min_angle >= self.max_angle:
+                raise ValueError(
+                    "min_angle must be less than max_angle when angle_format is 'other'."
+                )
+        return self
 
 
 class AIStatusResponse(BaseModel):
