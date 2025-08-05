@@ -67,7 +67,7 @@ MINUTES = 60  # seconds
 BASE_TRAININGS_LIMIT = 2
 WHITELISTED_TRAININGS_LIMIT = 8
 PRO_TRAININGS_LIMIT = 8
-FREE_MONTHLY_LIMIT = 3
+BASE_MONTHLY_LIMIT = 3
 PRO_MONTHLY_LIMIT = 100
 # Max allowed time for a server to cold start before we assume it failed
 TIMEOUT_SERVER_NOT_STARTED = 3 * MINUTES
@@ -753,7 +753,7 @@ def fastapi_app():
                 logger.warning(f"User {user_id} already has an active training")
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"You have already {PRO_TRAININGS_LIMIT} active trainings, please wait for it to finish or upgrade to a PRO plan",
+                    detail=f"You have already {PRO_TRAININGS_LIMIT} active trainings, please wait for one to finish.",
                 )
 
         # Check the user quota: max 3 trainings per month for free users, 100 per month for pro users.
@@ -770,17 +770,17 @@ def fastapi_app():
             .execute()
         )
         logger.info(f"User {user_id} has {len(user_quota.data)} trainings this month")
-        if user_plan is None and len(user_quota.data) >= FREE_MONTHLY_LIMIT:
+        if user_plan is None and len(user_quota.data) >= BASE_MONTHLY_LIMIT:
             logger.warning(
-                f"User {user_id} has reached the monthly quota of {FREE_MONTHLY_LIMIT} trainings"
+                f"User {user_id} has reached the monthly quota of {BASE_MONTHLY_LIMIT} trainings"
             )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"You have reached your monthly quota of {FREE_MONTHLY_LIMIT} trainings. Upgrade to a PRO plan for more trainings.",
+                detail=f"You have reached your monthly quota of {BASE_MONTHLY_LIMIT} trainings. Upgrade to a PRO plan for more trainings.",
             )
         elif user_plan == "pro" and len(user_quota.data) >= PRO_MONTHLY_LIMIT:
             logger.warning(
-                f"User {user_id} has reached the monthly quota of 100 trainings"
+                f"User {user_id} has reached the monthly quota of {PRO_MONTHLY_LIMIT} trainings"
             )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
