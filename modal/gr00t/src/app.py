@@ -65,7 +65,7 @@ HOURS = 60 * MINUTES  # seconds
 FUNCTION_IMAGE = gr00t_image
 FUNCTION_GPU: list[str | modal.gpu._GPUConfig | None] = ["A100-40GB", "L40S"]
 FUNCTION_TIMEOUT = 8 * MINUTES
-TRAINING_TIMEOUT = 12 * HOURS
+TRAINING_TIMEOUT = 2 * HOURS
 
 app = modal.App("gr00t-server")
 gr00t_volume = modal.Volume.from_name("gr00t-n1")

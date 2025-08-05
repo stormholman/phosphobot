@@ -1,7 +1,8 @@
+import { PhosphoProCallout } from "@/components/callout/phospho-pro";
 import { AutoComplete, type Option } from "@/components/common/autocomplete";
 import { CopyButton } from "@/components/common/copy-button";
 import { LogStream } from "@/components/custom/LogsStream";
-import { ModelsCard } from "@/components/custom/ModelsDialog";
+import { ModelsCard } from "@/components/custom/ModelsTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/context/AuthContext";
 import { useGlobalStore } from "@/lib/hooks";
 import { fetchWithBaseUrl, fetcher } from "@/lib/utils";
 import type { AdminTokenSettings } from "@/types";
@@ -159,6 +161,8 @@ interface TrainingInfoResponse {
 }
 
 export function AITrainingPage() {
+  const { proUser } = useAuth();
+
   const selectedDataset = useGlobalStore((state) => state.selectedDataset);
   const setSelectedDataset = useGlobalStore(
     (state) => state.setSelectedDataset,
@@ -367,7 +371,9 @@ export function AITrainingPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8 flex flex-col gap-2">
+      {!proUser && <PhosphoProCallout />}
+
       <Tabs defaultValue="train">
         <div className="flex justify-between">
           <TabsList className="flex flex-col md:flex-row gap-4 border-1">
