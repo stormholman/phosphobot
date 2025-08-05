@@ -316,13 +316,35 @@ export function AIControlPage() {
                     type="number"
                     placeholder="Min"
                     value={minAngle}
-                    onChange={(e) => setMinAngle(Number(e.target.value))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "" || value === "-") {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        setMinAngle(value as any);
+                      } else {
+                        const numValue = Number(value);
+                        if (!isNaN(numValue)) {
+                          setMinAngle(numValue);
+                        }
+                      }
+                    }}
                   />
                   <Input
                     type="number"
                     placeholder="Max"
                     value={maxAngle}
-                    onChange={(e) => setMaxAngle(Number(e.target.value))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "" || value === "-") {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        setMaxAngle(value as any);
+                      } else {
+                        const numValue = Number(value);
+                        if (!isNaN(numValue)) {
+                          setMaxAngle(numValue);
+                        }
+                      }
+                    }}
                   />
                 </div>
               </div>
