@@ -41,6 +41,7 @@ import {
   Pause,
   Play,
   Square,
+  TestTubeDiagonal,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -273,7 +274,12 @@ export function AIControlPage() {
                 value={selectedAngleFormat}
                 onValueChange={setSelectedAngleFormat}
               >
-                <ToggleGroupItem value="radians">Radians</ToggleGroupItem>
+                <ToggleGroupItem value="radians">
+                  <div className="flex items-center">
+                    <TestTubeDiagonal className="mr-1 h-4 w-4" />
+                    Radians
+                  </div>
+                </ToggleGroupItem>
                 <ToggleGroupItem value="degrees">Degrees</ToggleGroupItem>
                 <ToggleGroupItem value="other">Other</ToggleGroupItem>
               </ToggleGroup>
