@@ -7,7 +7,7 @@ const PHOSPHO_PRO_SUBSCRIBE_URL = "https://phospho.ai/pro";
 
 export function PhosphoProCallout({ className }: { className?: string }) {
   return (
-    <Card className={cn("border-green-400 py-2 px-4", className)}>
+    <Card className={cn("border-green-500 border-2 py-2 px-4", className)}>
       <CardContent className="flex items-center p-2">
         <div className="flex flex-row justify-between items-center gap-4 w-full">
           <div>
