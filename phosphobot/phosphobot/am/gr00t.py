@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, Literal, Tuple
 
 import cv2
 import zmq
@@ -463,7 +463,6 @@ class Gr00tSpawnConfig(BaseModel):
     state_keys: list[str]
     action_keys: list[str]
     embodiment_tag: str
-    unit: Literal["degrees", "rad"]
     hf_model_config: HuggingFaceAugmentedConfig
 
     # not good enough
@@ -611,17 +610,11 @@ class Gr00tN1(ActionModel):
             for key in hf_model_config.embodiment.statistics.action.component_names
         ]
 
-        # Determine angle unit based on state statistics
-        max_values = hf_model_config.embodiment.statistics.state.get_max_value()
-        use_degrees = max_values > 3.2
-        angle_unit: Literal["degrees", "rad"] = "degrees" if use_degrees else "rad"
-
         return Gr00tSpawnConfig(
             video_keys=video_keys,
             state_keys=state_keys,
             action_keys=action_keys,
             embodiment_tag=hf_model_config.embodiment.embodiment_tag,
-            unit=angle_unit,
             hf_model_config=hf_model_config,
         )
 
@@ -699,17 +692,11 @@ class Gr00tN1(ActionModel):
                 detail=f"Model has {number_of_robots} robots but {len(robots)} robots are connected.",
             )
 
-        # Determine angle unit based on state statistics
-        max_values = hf_model_config.embodiment.statistics.state.get_max_value()
-        use_degrees = max_values > 3.2
-        angle_unit: Literal["degrees", "rad"] = "degrees" if use_degrees else "rad"
-
         return Gr00tSpawnConfig(
             video_keys=video_keys,
             state_keys=state_keys,
             action_keys=action_keys,
             embodiment_tag=hf_model_config.embodiment.embodiment_tag,
-            unit=angle_unit,
             hf_model_config=hf_model_config,
         )
 
@@ -724,6 +711,9 @@ class Gr00tN1(ActionModel):
         fps: int = 30,
         speed: float = 1.0,
         cameras_keys_mapping: Dict[str, int] | None = None,
+        angle_format: Literal["degrees", "radians", "other"] = "radians",
+        min_angle: float | None = None,
+        max_angle: float | None = None,
         **kwargs: Any,
     ):
         """
@@ -736,6 +726,11 @@ class Gr00tN1(ActionModel):
         nb_iter = 0
         config = model_spawn_config.hf_model_config
         signal_marked_as_started = False
+        unit: Literal["degrees", "rad", "other"]
+        if angle_format != "radians":
+            unit = angle_format
+        else:
+            unit = "rad"
 
         while control_signal.is_in_loop():
             logger.debug(
@@ -803,13 +798,19 @@ class Gr00tN1(ActionModel):
                 raise Exception("No robot connected. Exiting AI control loop.")
 
             # Concatenate all robot states
-            state = robots[0].read_joints_position(unit="rad")
+            state = robots[0].read_joints_position(
+                unit=unit, max_value=max_angle, min_value=min_angle
+            )
             for robot in robots[1:]:
                 state = np.concatenate(
-                    (state, robot.read_joints_position(unit="rad")), axis=0
+                    (
+                        state,
+                        robot.read_joints_position(
+                            unit=unit, max_value=max_angle, min_value=min_angle
+                        ),
+                    ),
+                    axis=0,
                 )
-            if model_spawn_config.unit == "degrees":
-                state = np.deg2rad(state)
 
             inputs = {
                 **image_inputs,
@@ -847,11 +848,10 @@ class Gr00tN1(ActionModel):
                 # Send the new joint position to the robot
                 action_list = action.tolist()
                 for robot_index in range(len(robots)):
-                    # If the action are all -pi in rad or -180 in degrees, skip
                     if all(
                         np.isclose(
                             action_list[robot_index * 6 : robot_index * 6 + 6],
-                            -np.pi if model_spawn_config.unit == "rad" else -180,
+                            -np.pi if unit == "rad" else -180,
                         )
                     ):
                         logger.warning("All predicted actions are -pi. Skipping.")
@@ -859,7 +859,9 @@ class Gr00tN1(ActionModel):
 
                     robots[robot_index].write_joint_positions(
                         angles=action_list[robot_index * 6 : robot_index * 6 + 6],
-                        unit=model_spawn_config.unit,
+                        unit=unit,
+                        max_value=max_angle,
+                        min_value=min_angle,
                     )
 
                 # Wait fps time

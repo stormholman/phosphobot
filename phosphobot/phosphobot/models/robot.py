@@ -36,10 +36,10 @@ class BaseRobot(ABC):
 
     @abstractmethod
     def set_motors_positions(
-        self, positions: np.ndarray, enable_gripper: bool = False
+        self, q_target_rad: np.ndarray, enable_gripper: bool = False
     ) -> None:
         """
-        Set the motor positions of the robot
+        Set the motor positions of the robot in radians.
         """
         raise NotImplementedError
 

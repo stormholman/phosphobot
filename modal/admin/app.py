@@ -7,7 +7,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 
 import requests  # type: ignore
 import sentry_sdk
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator

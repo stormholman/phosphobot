@@ -270,7 +270,7 @@ class UnitreeGo2(BaseMobileRobot):
         return state, joints_position
 
     def set_motors_positions(
-        self, positions: np.ndarray, enable_gripper: bool = False
+        self, q_target_rad: np.ndarray, enable_gripper: bool = False
     ) -> None:
         """
         Not implemented

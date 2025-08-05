@@ -49,6 +49,14 @@ interface GlobalStore {
   setSelectedModelType: (
     modelType: "ACT" | "ACT_BBOX" | "gr00t" | "custom",
   ) => void;
+  selectedAngleFormat: "degrees" | "radians" | "other";
+  setSelectedAngleFormat: (
+    angleFormat: "degrees" | "radians" | "other",
+  ) => void;
+  minAngle: number;
+  setMinAngle: (minAngle: number) => void;
+  maxAngle: number;
+  setMaxAngle: (maxAngle: number) => void;
   selectedDataset: string;
   setSelectedDataset: (dataset: string) => void;
   selectedCameraId: number;
@@ -95,6 +103,21 @@ const useGlobalStore = create(
       ) =>
         set(() => ({
           selectedModelType: modelType,
+        })),
+      selectedAngleFormat: "radians",
+      setSelectedAngleFormat: (angleFormat: "degrees" | "radians" | "other") =>
+        set(() => ({
+          selectedAngleFormat: angleFormat,
+        })),
+      minAngle: -3.14,
+      setMinAngle: (minAngle: number) =>
+        set(() => ({
+          minAngle: minAngle,
+        })),
+      maxAngle: 3.14,
+      setMaxAngle: (maxAngle: number) =>
+        set(() => ({
+          maxAngle: maxAngle,
         })),
       selectedDataset: "",
       setSelectedDataset: (dataset: string) =>
