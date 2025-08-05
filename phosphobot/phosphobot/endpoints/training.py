@@ -157,6 +157,15 @@ async def start_training(
             )
         if response.status_code == 429:
             # Too many requests: this can happen if the user is trying to train too many models at once
+            # This can also happen if the user has reached the monthly quota of trainings
+            # If response.text is a JSON with a "detail" key, we raise an HTTPException with that detail
+            if isinstance(response.json(), dict) and "detail" in response.json():
+                detail = response.json()["detail"]
+                raise HTTPException(
+                    status_code=429,
+                    detail=detail,
+                )
+            # Otherwise, we raise a generic HTTPException with the response text
             raise HTTPException(status_code=429, detail=response.text)
 
         if response.status_code == 422:

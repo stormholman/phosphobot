@@ -10,13 +10,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Pagination,
   PaginationContent,
   PaginationItem,
@@ -128,11 +121,6 @@ export function ModelStatusFilter({
   );
 }
 
-interface ModelsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
 const ValueWithTooltip = ({ value }: { value: string }) => {
   // Don't use tooltip if value is short
   if (!value || value.length < 30) {
@@ -211,16 +199,25 @@ const ModelRow: React.FC<{ model: SupabaseTrainingModel }> = ({ model }) => {
             <div className="flex items-center">
               <CopyButton text={model.model_name} hint={"Copy model name"} />
               {/* Button to open model page */}
-              <Button
-                onClick={() => window.open(url, "_blank")}
-                title="Go to model"
-                aria-label="Go to model"
-                className="text-blue-500 hover:bg-blue-50 cursor-pointer"
-                variant="ghost"
-                size="icon"
-              >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => window.open(url, "_blank")}
+                      title="Go to model"
+                      aria-label="Go to model"
+                      className="text-blue-500 hover:bg-blue-50 cursor-pointer"
+                      variant="ghost"
+                      size="icon"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Go to model page on Hugging Face
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               {/* Cancel button - only show for running models */}
               {model.status === "running" && (
                 <TooltipProvider>
@@ -281,150 +278,6 @@ const ModelRow: React.FC<{ model: SupabaseTrainingModel }> = ({ model }) => {
   );
 };
 
-export const ModelsDialog: React.FC<ModelsDialogProps> = ({
-  open,
-  onOpenChange,
-}) => {
-  const {
-    data: modelsData,
-    isLoading,
-    error,
-  } = useSWR<TrainingConfig>(
-    ["/training/models/read"],
-    ([endpoint]) => fetcher(endpoint, "POST"),
-    {
-      refreshInterval: 5000,
-    },
-  );
-
-  const models = modelsData?.models || [];
-  const [statusFilter, setStatusFilter] = useState<
-    "succeeded" | "failed" | "running" | "canceled" | null
-  >(null);
-
-  // Filter models based on status
-  const filteredModels = useMemo(() => {
-    if (!statusFilter) return models;
-    return models.filter((model) => model.status === statusFilter);
-  }, [models, statusFilter]);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(filteredModels.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentModels = filteredModels.slice(startIndex, endIndex);
-
-  // Reset to first page when models or filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filteredModels.length]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1200px] w-full">
-        <DialogHeader>
-          <DialogTitle>Trained Models</DialogTitle>
-          <DialogDescription>
-            You can only run one training job at a time.
-            <br />
-            If you get a "Failed" status, please check the error log on the
-            Hugging Face model page.
-            <br />
-            For more advanced options, such as changing the number of epochs,
-            steps, etc..., please use the <code>/training/start</code> api
-            endpoint.
-          </DialogDescription>
-        </DialogHeader>
-        <ModelStatusFilter
-          onStatusChange={setStatusFilter}
-          className="border-b pb-4"
-        />
-
-        {isLoading ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center py-4">
-            <p className="text-red-500">{error}</p>
-          </div>
-        ) : filteredModels.length === 0 ? (
-          <div className="text-center py-4">
-            {statusFilter
-              ? `No ${statusFilter} models found.`
-              : "No models found."}
-          </div>
-        ) : (
-          <div className="max-h-[50vh] overflow-auto border rounded-md">
-            <Table>
-              <TableHeader className="sticky top-0 z-10">
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Model Name</TableHead>
-                  <TableHead>Model Type</TableHead>
-                  <TableHead>Training Parameters</TableHead>
-                  <TableHead>Dataset Name</TableHead>
-                  <TableHead>Wandb</TableHead>
-                  <TableHead>Created at</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {currentModels.map((model, index) => (
-                  <ModelRow key={index} model={model} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-        {filteredModels.length > itemsPerPage && (
-          <div className="flex justify-center mt-4">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    className={
-                      currentPage === 1
-                        ? "pointer-events-none opacity-50"
-                        : "cursor-pointer"
-                    }
-                  />
-                </PaginationItem>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                  (page) => (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                        onClick={() => setCurrentPage(page)}
-                        isActive={currentPage === page}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ),
-                )}
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() =>
-                      setCurrentPage(Math.min(totalPages, currentPage + 1))
-                    }
-                    className={
-                      currentPage === totalPages
-                        ? "pointer-events-none opacity-50"
-                        : "cursor-pointer"
-                    }
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-};
-
 export const ModelsCard: React.FC = () => {
   const {
     data: modelsData,
@@ -466,14 +319,8 @@ export const ModelsCard: React.FC = () => {
       <CardHeader>
         <CardTitle>Trained Models</CardTitle>
         <CardDescription>
-          You can only run one training job at a time.
-          <br />
           If you get a "Failed" status, please check the error log on the
           Hugging Face model page.
-          <br />
-          For more advanced options, such as changing the number of epochs,
-          steps, etc..., please use the <code>/training/start</code> api
-          endpoint.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-y-4">

@@ -67,6 +67,8 @@ MINUTES = 60  # seconds
 BASE_TRAININGS_LIMIT = 2
 WHITELISTED_TRAININGS_LIMIT = 8
 PRO_TRAININGS_LIMIT = 8
+BASE_MONTHLY_LIMIT = 3
+PRO_MONTHLY_LIMIT = 100
 # Max allowed time for a server to cold start before we assume it failed
 TIMEOUT_SERVER_NOT_STARTED = 3 * MINUTES
 
@@ -354,7 +356,6 @@ class PublicUser(BaseModel):
 
 @app.function(
     image=admin_image,
-    allow_concurrent_inputs=1000,
     secrets=[
         modal.Secret.from_name("huggingface"),
         modal.Secret.from_name("supabase"),
@@ -363,6 +364,7 @@ class PublicUser(BaseModel):
     # We keep at least one instance of the app running
     min_containers=1,
 )
+@modal.concurrent(max_inputs=1000)
 @modal.asgi_app()
 def fastapi_app():
     from datetime import datetime, timezone
@@ -718,14 +720,14 @@ def fastapi_app():
         if user_data.data:
             user_plan = user_data.data[0].get("plan", None)
 
-        # Handle timeout based on user plan. Default to 3 hours for normal users.
-        timeout_seconds = 3 * 60 * 60  # 3 hours in seconds
+        # Handle timeout based on user plan. Default to 1 hours for normal users.
+        timeout_seconds = 1 * 60 * 60  # 1 hours in seconds
         if user_plan == "pro" or user_id in id_whitelist:
             # Pro users or whitelisted users get a longer timeout
             logger.info(
-                f"User {user_id} is a PRO user or whitelisted, extending timeout to 12 hours"
+                f"User {user_id} is a PRO user or whitelisted, extending timeout to 2 hours"
             )
-            timeout_seconds = 12 * 60 * 60  # 12 hours in seconds
+            timeout_seconds = 2 * 60 * 60  # 12 hours in seconds
 
         if user_id in id_whitelist:
             logger.info(f"User {user_id} is launching a training")
@@ -751,8 +753,39 @@ def fastapi_app():
                 logger.warning(f"User {user_id} already has an active training")
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"You have already {PRO_TRAININGS_LIMIT} active trainings, please wait for it to finish or upgrade to a PRO plan",
+                    detail=f"You have already {PRO_TRAININGS_LIMIT} active trainings, please wait for one to finish.",
                 )
+
+        # Check the user quota: max 3 trainings per month for free users, 100 per month for pro users.
+        # It resets on the 1st of each month.
+        current_month = datetime.now(timezone.utc).month
+        user_quota = (
+            supabase_client.table("trainings")
+            .select("*")
+            .eq("user_id", user.user.id)
+            .gte(
+                "requested_at",
+                datetime(datetime.now(timezone.utc).year, current_month, 1),
+            )
+            .execute()
+        )
+        logger.info(f"User {user_id} has {len(user_quota.data)} trainings this month")
+        if user_plan is None and len(user_quota.data) >= BASE_MONTHLY_LIMIT:
+            logger.warning(
+                f"User {user_id} has reached the monthly quota of {BASE_MONTHLY_LIMIT} trainings"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"You have reached your monthly quota of {BASE_MONTHLY_LIMIT} trainings. Upgrade to a PRO plan for more trainings.",
+            )
+        elif user_plan == "pro" and len(user_quota.data) >= PRO_MONTHLY_LIMIT:
+            logger.warning(
+                f"User {user_id} has reached the monthly quota of {PRO_MONTHLY_LIMIT} trainings"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"You have reached your monthly quota of {PRO_MONTHLY_LIMIT} trainings. Limit is reset on the 1st of each month. Contact support if you need more.",
+            )
 
         supabase_data = {
             "status": "running",
