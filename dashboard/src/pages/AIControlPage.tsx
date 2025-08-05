@@ -263,94 +263,6 @@ export function AIControlPage() {
             </ToggleGroup>
           </div>
 
-          {/* The user should select the format of the angles he recorded: degrees, radians or custom */}
-          <div className="flex flex-col gap-y-2">
-            <div className="text-xs text-muted-foreground">
-              Select angle format of the original dataset
-            </div>
-            <div className="flex items-center gap-2">
-              <ToggleGroup
-                type="single"
-                value={selectedAngleFormat}
-                onValueChange={setSelectedAngleFormat}
-              >
-                <ToggleGroupItem value="radians">
-                  <div className="flex items-center">
-                    <TestTubeDiagonal className="mr-1 h-4 w-4" />
-                    Radians
-                  </div>
-                </ToggleGroupItem>
-                <ToggleGroupItem value="degrees">Degrees</ToggleGroupItem>
-                <ToggleGroupItem value="other">Other</ToggleGroupItem>
-              </ToggleGroup>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>
-                      phosphobot records angles in radians. If you are not sure
-                      about the format of your dataset, you can visualize it{" "}
-                      <a
-                        href="https://lerobot-visualize-dataset.hf.space/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline"
-                      >
-                        here
-                      </a>
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            {/* If other is selected, we show a min and max value for normalization */}
-            {selectedAngleFormat === "other" && (
-              <div className="flex flex-col gap-y-2">
-                <div className="text-xs text-muted-foreground">
-                  Select min and max values for normalization
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Min"
-                    value={minAngle}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === "" || value === "-") {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        setMinAngle(value as any);
-                      } else {
-                        const numValue = Number(value);
-                        if (!isNaN(numValue)) {
-                          setMinAngle(numValue);
-                        }
-                      }
-                    }}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Max"
-                    value={maxAngle}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === "" || value === "-") {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        setMaxAngle(value as any);
-                      } else {
-                        const numValue = Number(value);
-                        if (!isNaN(numValue)) {
-                          setMaxAngle(numValue);
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
           {selectedModelType && (
             <>
               <div className="space-y-2">
@@ -450,6 +362,106 @@ export function AIControlPage() {
                     </a>
                   </Button>
                 </div>
+              </div>
+
+              {/* The user should select the format of the angles he recorded: degrees, radians or custom */}
+              <div className="flex flex-col gap-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Select angle units in the original dataset
+                </div>
+                <div className="flex items-center gap-2">
+                  <ToggleGroup
+                    type="single"
+                    value={selectedAngleFormat}
+                    onValueChange={setSelectedAngleFormat}
+                  >
+                    <ToggleGroupItem value="radians" className="flex-none">
+                      <div className="flex items-center w-full">
+                        <TestTubeDiagonal className="mr-1 h-4 w-4 text-green-500" />
+                        Radians (default)
+                      </div>
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="degrees">Degrees</ToggleGroupItem>
+                    <ToggleGroupItem value="other">Other</ToggleGroupItem>
+                  </ToggleGroup>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>
+                          <span className="font-semibold">
+                            phosphobot records data in radians.{" "}
+                          </span>
+                          <span>
+                            Use Radians if you recorded your dataset with
+                            phosphobot.
+                          </span>
+                        </p>
+                        <p>
+                          LeRobot records data either between [-100, 100],
+                          either in degrees.
+                        </p>
+                        <p>
+                          Unsure about the units of your dataset? Use{" "}
+                          <a
+                            href="https://lerobot-visualize-dataset.hf.space/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline"
+                          >
+                            the dataset visualizer.
+                          </a>
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                {/* If other is selected, we show a min and max value for denormalization */}
+                {selectedAngleFormat === "other" && (
+                  <div className="flex flex-col gap-y-2">
+                    <div className="text-xs text-muted-foreground">
+                      Select min and max values for denormalization
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Min"
+                        value={minAngle}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === "" || value === "-") {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            setMinAngle(value as any);
+                          } else {
+                            const numValue = Number(value);
+                            if (!isNaN(numValue)) {
+                              setMinAngle(numValue);
+                            }
+                          }
+                        }}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Max"
+                        value={maxAngle}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === "" || value === "-") {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            setMaxAngle(value as any);
+                          } else {
+                            const numValue = Number(value);
+                            if (!isNaN(numValue)) {
+                              setMaxAngle(numValue);
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <Accordion
