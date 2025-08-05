@@ -423,6 +423,9 @@ class ACT(ActionModel):
         cameras_keys_mapping: Dict[str, int] | None = None,
         prompt: Optional[str] = None,
         selected_camera_id: Optional[int] = None,
+        angle_format: Literal["degrees", "radians", "other"] = "radians",
+        min_angle: float | None = None,
+        max_angle: float | None = None,
         **kwargs,
     ):
         """
@@ -433,10 +436,6 @@ class ACT(ActionModel):
         """
 
         nb_iter = 0
-        # We don't have any information about the unit of the model
-        # So we assume it's in radians, if we receive actions greater than 2pi
-        # we switch to using degrees
-        unit: Literal["rad", "degrees"] = "rad"
         config = model_spawn_config.hf_model_config
 
         signal_marked_as_started = False
@@ -538,17 +537,21 @@ class ACT(ActionModel):
                 if not control_signal.is_in_loop():
                     break
 
-                if unit == "rad":
-                    if action.max() > 2 * np.pi:
-                        logger.warning("Actions are in degrees. Converting to radians.")
-                        unit = "degrees"
-
                 # Send the new joint position to the robot
                 action_list = action.tolist()
+
+                unit: Literal["rad", "motor_units", "degrees", "other"]
+                if angle_format == "radians":
+                    unit = "rad"
+                else:
+                    unit = angle_format
+
                 for robot_index in range(len(robots)):
                     robots[robot_index].write_joint_positions(
                         angles=action_list[robot_index * 6 : robot_index * 6 + 6],
                         unit=unit,
+                        min_value=min_angle,
+                        max_value=max_angle,
                     )
 
                 # Wait fps time

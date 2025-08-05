@@ -213,9 +213,9 @@ class BaseManipulator(BaseRobot):
 
         # When creating a new robot, you should add default values for these
         # These values depends on the hardware
-        assert (
-            self.CALIBRATION_POSITION is not None
-        ), "CALIBRATION_POSITION must be defined in the class"
+        assert self.CALIBRATION_POSITION is not None, (
+            "CALIBRATION_POSITION must be defined in the class"
+        )
         assert self.RESOLUTION is not None, "RESOLUTION must be defined in the class"
         assert self.SERVO_IDS is not None, "SERVO_IDS must be defined in the class"
 
@@ -647,9 +647,11 @@ class BaseManipulator(BaseRobot):
 
     def read_joints_position(
         self,
-        unit: Literal["rad", "motor_units", "degrees"] = "rad",
+        unit: Literal["rad", "motor_units", "degrees", "other"] = "rad",
         source: Literal["sim", "robot"] = "robot",
         joints_ids: Optional[List[int]] = None,
+        min_value: Optional[float] = None,
+        max_value: Optional[float] = None,
     ) -> np.ndarray:
         """
         Read the current angles q of the joints of the robot.
@@ -659,6 +661,7 @@ class BaseManipulator(BaseRobot):
                 - "rad": radians
                 - "motor_units": motor units (0 -> RESOLUTION)
                 - "degrees": degrees
+                - "other": any other unit, specify a min and max value to scale the output.
             source: The source of the data. Can be "sim" or "robot".
                 - "sim": read from the simulation
                 - "robot": read from the robot if connected. Otherwise, read from the simulation.
@@ -726,6 +729,23 @@ class BaseManipulator(BaseRobot):
             elif source_unit == "rad":
                 # Convert from radians to degrees
                 output_position = np.rad2deg(output_position)  # type: ignore
+        elif unit == "other":
+            if min_value is None or max_value is None:
+                raise ValueError(
+                    "For 'other' unit, min_value and max_value must be provided."
+                )
+            if source_unit == "motor_units":
+                # Convert from motor units to radians
+                output_position_rad = self._units_vec_to_radians(output_position)
+                # Normalize the angles to [min_value, max_value]
+
+                output_position = min_value + (max_value - min_value) * (
+                    (output_position_rad + np.pi) / (2 * np.pi)
+                )
+            elif source_unit == "rad":
+                output_position = min_value + (max_value - min_value) * (
+                    (output_position + np.pi) / (2 * np.pi)
+                )
         else:
             raise ValueError(
                 f"Invalid unit: {unit}. Must be one of ['rad', 'motor_units', 'degrees']"
@@ -813,8 +833,10 @@ class BaseManipulator(BaseRobot):
     def write_joint_positions(
         self,
         angles: List[float],
-        unit: Literal["rad", "motor_units", "degrees"],
+        unit: Literal["rad", "motor_units", "degrees", "other"],
         joints_ids: Optional[List[int]] = None,
+        min_value: float | None = None,
+        max_value: float | None = None,
     ) -> None:
         """
         Move the robot's joints to the specified angles.
@@ -826,6 +848,15 @@ class BaseManipulator(BaseRobot):
             np_angles_rad = np.deg2rad(np_angles_rad)
         elif unit == "motor_units":
             np_angles_rad = self._units_vec_to_radians(np_angles_rad)
+        elif unit == "other":
+            if min_value is None or max_value is None:
+                raise ValueError(
+                    "For 'other' unit, min_value and max_value must be provided."
+                )
+            # Normalize the angles to [-pi, pi]
+            np_angles_rad = (np_angles_rad - min_value) / (max_value - min_value) * (
+                2 * np.pi
+            ) - np.pi
 
         if joints_ids is None:
             if len(np_angles_rad) == len(self.SERVO_IDS):
@@ -1018,7 +1049,7 @@ class BaseManipulator(BaseRobot):
             if config is not None:
                 self.config = config
                 logger.success(
-                    f"Loaded default config for {self.name}, voltage {voltage}.\n{self.config.model_dump_json(indent=2)}"
+                    f"Loaded default config for {self.name}, voltage {voltage}."
                 )
                 return
 
