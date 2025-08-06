@@ -18,7 +18,7 @@ from phosphobot.models import (
     CancelTrainingRequest,
     StatusResponse,
     SupabaseTrainingModel,
-    TrainingConfig,
+    TrainingsList,
 )
 from phosphobot.supabase import get_client, user_is_logged_in
 from phosphobot.utils import get_hf_token, get_home_app_path, get_tokens
@@ -26,35 +26,95 @@ from phosphobot.utils import get_hf_token, get_home_app_path, get_tokens
 router = APIRouter(tags=["training"])
 
 
-@router.post("/training/models/read", response_model=TrainingConfig)
+@router.post("/training/models/read", response_model=TrainingsList)
 async def get_models(
     session=Depends(user_is_logged_in),
-) -> TrainingConfig:
-    """Get the list of models to be trained"""
+) -> TrainingsList:
+    """Get the list of models with aggregated AI control session metrics"""
     client = await get_client()
     user_id = session.user.id
 
-    model_list = await (
-        client.table("trainings")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("requested_at", desc=True)
-        .limit(1000)
-        .execute()
-    )
+    # Run this SQL query to create the function in Supabase:
+    # -- Switch to the public schema
+    # SET search_path = public;
 
-    if not model_list.data or len(model_list.data) == 0:
-        return TrainingConfig(
-            models=[],
-        )
+    # DROP FUNCTION IF EXISTS public.get_models_with_metrics(uuid, integer);
 
-    # Convert the list of models to a TrainingConfig object
-    training_config = TrainingConfig(
-        models=[
-            SupabaseTrainingModel.model_validate(model) for model in model_list.data
-        ]
-    )
-    return training_config
+    # CREATE OR REPLACE FUNCTION public.get_models_with_metrics(p_user_id uuid, p_limit integer DEFAULT 1000)
+    # RETURNS TABLE (
+    #   id               integer,
+    #   status           text,
+    #   user_id          uuid,
+    #   dataset_name     text,
+    #   model_name       text,
+    #   requested_at     timestamp,
+    #   terminated_at    timestamp,
+    #   used_wandb       boolean,
+    #   model_type       text,
+    #   training_params  jsonb,
+    #   session_count    bigint,
+    #   success_rate     double precision
+    # )
+    # LANGUAGE sql
+    # AS $$
+    #   WITH recent_trainings AS (
+    #     SELECT
+    #       id,
+    #       status,
+    #       user_id,
+    #       dataset_name,
+    #       model_name,
+    #       requested_at,
+    #       terminated_at,
+    #       used_wandb,
+    #       model_type,
+    #       training_params
+    #     FROM trainings
+    #     WHERE user_id = p_user_id
+    #     ORDER BY requested_at DESC
+    #     LIMIT p_limit
+    #   ), stats AS (
+    #     SELECT
+    #       model_id,
+    #       COUNT(*)                          AS session_count,
+    #       SUM(CASE WHEN feedback IS NOT NULL THEN 1 ELSE 0 END) AS feedback_given,
+    #       SUM(CASE WHEN feedback = 'positive' THEN 1 ELSE 0 END) AS positive_count
+    #     FROM ai_control_sessions
+    #     -- WHERE model_id IN (SELECT id FROM recent_trainings)
+    #     WHERE user_id = p_user_id
+    #     GROUP BY model_id
+    #   )
+    #   SELECT
+    #     t.id,
+    #     t.status,
+    #     t.user_id,
+    #     t.dataset_name,
+    #     t.model_name,
+    #     t.requested_at,
+    #     t.terminated_at,
+    #     t.used_wandb,
+    #     t.model_type,
+    #     t.training_params,
+    #     COALESCE(s.session_count, 0)      AS session_count,
+    #     CASE
+    #       WHEN COALESCE(s.feedback_given, 0) = 0 THEN 0.0
+    #       ELSE s.positive_count::double precision / s.feedback_given
+    #     END                                AS success_rate
+    #   FROM recent_trainings t
+    #   LEFT JOIN stats s
+    #     ON t.model_name = s.model_id
+    #   ORDER BY t.requested_at DESC;
+    # $$;
+
+    result = await client.rpc(
+        "get_models_with_metrics",
+        {"p_user_id": user_id, "p_limit": 1000},
+    ).execute()
+    trainings = result.data or []
+
+    # Validate and return
+    models = [SupabaseTrainingModel.model_validate(item) for item in trainings]
+    return TrainingsList(models=models)
 
 
 @router.post(

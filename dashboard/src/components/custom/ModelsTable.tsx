@@ -1,5 +1,3 @@
-"use client";
-
 import { CopyButton } from "@/components/common/copy-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +32,7 @@ import {
 } from "@/components/ui/tooltip";
 import { fetchWithBaseUrl, fetcher } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import type { SupabaseTrainingModel, TrainingConfig } from "@/types";
+import type { SupabaseTrainingModel, TrainingsList } from "@/types";
 import { Ban, Check, ExternalLink, Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
@@ -247,6 +245,20 @@ const ModelRow: React.FC<{ model: SupabaseTrainingModel }> = ({ model }) => {
           </div>
         </TableCell>
         <TableCell>{model.model_type}</TableCell>
+
+        <TableCell>
+          {ValueWithTooltip({ value: model.dataset_name })}
+          <CopyButton text={model.dataset_name} hint={"Copy dataset name"} />
+        </TableCell>
+
+        <TableCell>{model.session_count}</TableCell>
+        <TableCell>
+          {model.success_rate !== null ? (
+            <span>{model.success_rate.toFixed(2)}%</span>
+          ) : (
+            <span className="text-gray-500">N/A</span>
+          )}
+        </TableCell>
         <TableCell>
           <div className="flex flex-col">
             {model.training_params &&
@@ -260,10 +272,7 @@ const ModelRow: React.FC<{ model: SupabaseTrainingModel }> = ({ model }) => {
               )}
           </div>
         </TableCell>
-        <TableCell>
-          {ValueWithTooltip({ value: model.dataset_name })}
-          <CopyButton text={model.dataset_name} hint={"Copy dataset name"} />
-        </TableCell>
+        <TableCell>{new Date(model.requested_at).toLocaleString()}</TableCell>
         <TableCell>
           {model.used_wandb ? (
             <Check className="h-4 w-4 inline mr-1 text-green-500" />
@@ -272,7 +281,6 @@ const ModelRow: React.FC<{ model: SupabaseTrainingModel }> = ({ model }) => {
           )}
           {model.used_wandb ? "Yes" : "No"}
         </TableCell>
-        <TableCell>{new Date(model.requested_at).toLocaleString()}</TableCell>
       </TableRow>
     </>
   );
@@ -283,7 +291,7 @@ export const ModelsCard: React.FC = () => {
     data: modelsData,
     isLoading,
     error,
-  } = useSWR<TrainingConfig>(
+  } = useSWR<TrainingsList>(
     ["/training/models/read"],
     ([endpoint]) => fetcher(endpoint, "POST"),
     {
@@ -391,10 +399,12 @@ export const ModelsCard: React.FC = () => {
                   <TableHead>Status</TableHead>
                   <TableHead>Model Name</TableHead>
                   <TableHead>Model Type</TableHead>
-                  <TableHead>Training Parameters</TableHead>
                   <TableHead>Dataset Name</TableHead>
-                  <TableHead>Wandb</TableHead>
+                  <TableHead>Sessions count</TableHead>
+                  <TableHead>Success rate</TableHead>
+                  <TableHead>Training Parameters</TableHead>
                   <TableHead>Created at</TableHead>
+                  <TableHead>Wandb</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

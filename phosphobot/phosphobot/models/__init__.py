@@ -1068,9 +1068,12 @@ class SupabaseTrainingModel(BaseModel):
     model_type: str
     training_params: dict | None = None
     modal_function_call_id: str | None = None
+    # Metrics
+    session_count: int
+    success_rate: float
 
 
-class TrainingConfig(BaseModel):
+class TrainingsList(BaseModel):
     models: list[SupabaseTrainingModel]
 
 

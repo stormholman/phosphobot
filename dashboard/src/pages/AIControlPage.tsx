@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useGlobalStore } from "@/lib/hooks";
 import { fetchWithBaseUrl, fetcher } from "@/lib/utils";
-import type { AIStatusResponse, ServerStatus, TrainingConfig } from "@/types";
+import type { AIStatusResponse, ServerStatus, TrainingsList } from "@/types";
 import {
   CameraIcon,
   CameraOff,
@@ -99,7 +99,7 @@ export function AIControlPage() {
         model_type: selectedModelType,
       }),
   );
-  const { data: trainedModels } = useSWR<TrainingConfig>(
+  const { data: trainedModels } = useSWR<TrainingsList>(
     ["/training/models/read"],
     ([endpoint]) => fetcher(endpoint, "POST"),
   );
