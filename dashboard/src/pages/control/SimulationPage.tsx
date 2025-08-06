@@ -545,6 +545,68 @@ const SimulationPage: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Kinematics Setup Checklist */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Eye className="h-5 w-5" />
+                    Kinematics Setup Checklist
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">1.</span>
+                      <div>
+                        <strong>Device Setup:</strong> iPhone Pro or device with RGBD capabilities mounted on holder
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">2.</span>
+                      <div>
+                        <strong>App Installation:</strong> Install <a href="https://apps.apple.com/us/app/record3d-3d-videos/id1477716895?ls=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Record3D</a> with USB connection in-app purchase ($6 one-time)
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">3.</span>
+                      <div>
+                        <strong>ArUco Marker:</strong> Generate marker ID=0 at <a href="https://chev.me/arucogen/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">ArUco Generator</a> and print
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">4.</span>
+                      <div>
+                        <strong>Robot Connection:</strong> Ensure robot is connected and endpoint verified
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">5.</span>
+                      <div>
+                        <strong>API Key:</strong> Set Anthropic API key in configuration above
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">6.</span>
+                      <div>
+                        <strong>Marker Placement:</strong> After calling move init function, place ArUco marker directly under end-effector
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 font-medium">7.</span>
+                      <div>
+                        <strong>Camera View:</strong> Ensure ArUco marker remains visible in RGBD camera view throughout operation
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
