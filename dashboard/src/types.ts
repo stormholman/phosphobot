@@ -75,9 +75,11 @@ export type SupabaseTrainingModel = {
   used_wandb: boolean | null;
   model_type: string;
   training_params: null | Record<string, string | number | null>;
+  session_count: number;
+  success_rate: number | null;
 };
 
-export type TrainingConfig = {
+export type TrainingsList = {
   models: SupabaseTrainingModel[];
 };
 
