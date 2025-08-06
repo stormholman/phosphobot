@@ -335,34 +335,12 @@ def compute_stats(
     batch_size: int = 128,
     num_workers: int = 6,
     max_num_samples: Optional[int] = None,
-    max_episodes_for_videos: int = 10,
 ) -> dict[str, dict[str, torch.Tensor]]:
-    """Compute mean/std and min/max statistics of all data keys in a LeRobotDataset.
-
-    Args:
-        dataset_path: Path to the dataset
-        batch_size: Batch size for data loading
-        num_workers: Number of workers for data loading
-        max_num_samples: Maximum number of samples to process (None for all)
-        max_episodes_for_videos: Maximum number of episodes to use for video statistics (default: 10)
-    """
+    """Compute mean/std and min/max statistics of all data keys in a LeRobotDataset."""
     dataset = ParquetEpisodesDataset(dataset_path=dataset_path)
 
     if max_num_samples is None:
         max_num_samples = len(dataset)
-
-    # Create indices for video sampling - only sample from first N episodes
-    video_sample_indices: list[int] = []
-    if max_episodes_for_videos > 0:
-        episodes_to_sample = min(max_episodes_for_videos, len(dataset.episode_nb_steps))
-        current_idx = 0
-        for ep_idx in range(episodes_to_sample):
-            episode_length = dataset.episode_nb_steps[ep_idx]
-            # Add all indices from this episode
-            video_sample_indices.extend(
-                range(current_idx, current_idx + episode_length)
-            )
-            current_idx += episode_length
 
     # Example DataLoader that returns dictionaries of tensors
     generator = torch.Generator()
@@ -377,26 +355,17 @@ def compute_stats(
     stats_patterns = get_stats_einops_patterns(dataset, dataloader)
 
     # mean and std will be computed incrementally while max and min will track the running value.
-    feat_mean, feat_std, feat_max, feat_min = {}, {}, {}, {}
-    video_feat_mean, video_feat_std, video_feat_max, video_feat_min = {}, {}, {}, {}
-
-    # Initialize stats for all keys
+    mean, std, max, min = {}, {}, {}, {}
     for key in stats_patterns:
-        feat_mean[key] = torch.tensor(0.0).float()
-        feat_std[key] = torch.tensor(0.0).float()
-        feat_max[key] = torch.tensor(-float("inf")).float()
-        feat_min[key] = torch.tensor(float("inf")).float()
+        mean[key] = torch.tensor(0.0).float()
+        std[key] = torch.tensor(0.0).float()
+        max[key] = torch.tensor(-float("inf")).float()
+        min[key] = torch.tensor(float("inf")).float()
 
-        # Separate initialization for video keys
-        if key in dataset.video_keys:
-            video_feat_mean[key] = torch.tensor(0.0).float()
-            video_feat_std[key] = torch.tensor(0.0).float()
-            video_feat_max[key] = torch.tensor(-float("inf")).float()
-            video_feat_min[key] = torch.tensor(float("inf")).float()
-
+    # Note: Due to be refactored soon. The point of storing `first_batch` is to make sure we don't get
+    # surprises when rerunning the sampler.
     first_batch: Optional[dict] = None
     running_item_count = 0  # for online mean computation
-    video_running_item_count = 0  # separate counter for video stats
 
     logger.info("Starting to create seeded dataloader")
 
@@ -408,62 +377,37 @@ def compute_stats(
     ):
         this_batch_size = len(batch["index"])
         running_item_count += this_batch_size
-
         if first_batch is None:
             first_batch = deepcopy(batch)
-
         for key, pattern in stats_patterns.items():
-            if key not in batch:
+            if key not in batch.keys():
+                if not error_raised:
+                    logger.error(
+                        f"[MEAN] Key '{key}' from stats_patterns not found in batch {i}/{ceil(max_num_samples) / batch_size}. Available keys: {batch.keys()}. Ignoring this key."
+                    )
                 continue
-
             batch[key] = batch[key].float()
-
-            if key in dataset.video_keys:
-                batch_indices = batch["index"].cpu().numpy()
-                mask = np.isin(batch_indices, video_sample_indices)
-
-                if mask.sum() > 0:
-                    # <-- ensure mask is 1-D, length B -->
-                    mask_tensor = torch.from_numpy(mask).bool().view(-1)
-                    sampled_batch_data = batch[key][mask_tensor]
-                    sampled_batch_size = len(sampled_batch_data)
-                    video_running_item_count += sampled_batch_size
-
-                    batch_mean = einops.reduce(sampled_batch_data, pattern, "mean")
-                    video_feat_mean[key] = (
-                        video_feat_mean[key]
-                        + sampled_batch_size
-                        * (batch_mean - video_feat_mean[key])
-                        / video_running_item_count
-                    )
-                    video_feat_max[key] = torch.maximum(
-                        video_feat_max[key],
-                        einops.reduce(sampled_batch_data, pattern, "max"),
-                    )
-                    video_feat_min[key] = torch.minimum(
-                        video_feat_min[key],
-                        einops.reduce(sampled_batch_data, pattern, "min"),
-                    )
-            else:
-                # non-video keys unchanged
-                batch_mean = einops.reduce(batch[key], pattern, "mean")
-                feat_mean[key] = (
-                    feat_mean[key]
-                    + this_batch_size
-                    * (batch_mean - feat_mean[key])
-                    / running_item_count
-                )
-                feat_max[key] = torch.maximum(
-                    feat_max[key], einops.reduce(batch[key], pattern, "max")
-                )
-                feat_min[key] = torch.minimum(
-                    feat_min[key], einops.reduce(batch[key], pattern, "min")
-                )
+            # Numerically stable update step for mean computation.
+            batch_mean = einops.reduce(batch[key], pattern, "mean")
+            # Hint: to update the mean we need x̄ₙ = (Nₙ₋₁x̄ₙ₋₁ + Bₙxₙ) / Nₙ, where the subscript represents
+            # the update step, N is the running item count, B is this batch size, x̄ is the running mean,
+            # and x is the current batch mean. Some rearrangement is then required to avoid risking
+            # numerical overflow. Another hint: Nₙ₋₁ = Nₙ - Bₙ. Rearrangement yields
+            # x̄ₙ = x̄ₙ₋₁ + Bₙ * (xₙ - x̄ₙ₋₁) / Nₙ
+            mean[key] = (
+                mean[key]
+                + this_batch_size * (batch_mean - mean[key]) / running_item_count
+            )
+            max[key] = torch.maximum(
+                max[key], einops.reduce(batch[key], pattern, "max")
+            )
+            min[key] = torch.minimum(
+                min[key], einops.reduce(batch[key], pattern, "min")
+            )
 
         if i == ceil(max_num_samples / batch_size) - 1:
             break
 
-    # Second pass for standard deviation computation
     dataloader = torch.utils.data.DataLoader(
         dataset,
         num_workers=num_workers,
@@ -473,9 +417,7 @@ def compute_stats(
     )
     first_batch_ = None
     running_item_count = 0  # for online std computation
-    video_running_item_count = 0  # separate counter for video std
     error_raised = False
-
     for i, batch in tqdm.tqdm(
         enumerate(dataloader),
         total=ceil(max_num_samples / batch_size),
@@ -483,81 +425,42 @@ def compute_stats(
     ):
         this_batch_size = len(batch["index"])
         running_item_count += this_batch_size
-
+        # Sanity check to make sure the batches are still in the same order as before.
         if first_batch_ is None:
             first_batch_ = deepcopy(batch)
+            # Ensure first_batch is not None before indexing
             if first_batch is not None:
                 for key in stats_patterns:
                     assert torch.equal(first_batch_[key], first_batch[key])
-
         for key, pattern in stats_patterns.items():
-            if key not in batch:
+            if key not in batch.keys():
+                if not error_raised:
+                    logger.error(
+                        f"[STD] Key '{key}' from stats_patterns not found in batch {i}/{ceil(max_num_samples) / batch_size}. Available keys: {batch.keys()}. Ignoring this key."
+                    )
                 continue
-
             batch[key] = batch[key].float()
-
-            if key in dataset.video_keys:
-                batch_indices = batch["index"].cpu().numpy()
-                mask = np.isin(batch_indices, video_sample_indices)
-
-                if mask.sum() > 0:
-                    # <-- same 1-D mask fix here -->
-                    mask_tensor = torch.from_numpy(mask).bool().view(-1)
-                    sampled_batch_data = batch[key][mask_tensor]
-                    sampled_batch_size = len(sampled_batch_data)
-                    video_running_item_count += sampled_batch_size
-
-                    batch_std = einops.reduce(
-                        (sampled_batch_data - video_feat_mean[key]) ** 2,
-                        pattern,
-                        "mean",
-                    )
-                    video_feat_std[key] = (
-                        video_feat_std[key]
-                        + sampled_batch_size
-                        * (batch_std - video_feat_std[key])
-                        / video_running_item_count
-                    )
-            else:
-                batch_std = einops.reduce(
-                    (batch[key] - feat_mean[key]) ** 2, pattern, "mean"
-                )
-                feat_std[key] = (
-                    feat_std[key]
-                    + this_batch_size * (batch_std - feat_std[key]) / running_item_count
-                )
+            # Numerically stable update step for mean computation (where the mean is over squared
+            # residuals). See notes in the mean computation loop above.
+            batch_std = einops.reduce((batch[key] - mean[key]) ** 2, pattern, "mean")
+            std[key] = (
+                std[key] + this_batch_size * (batch_std - std[key]) / running_item_count
+            )
 
         if i == ceil(max_num_samples / batch_size) - 1:
             break
 
-    # Finalize standard deviation computation
     for key in stats_patterns:
-        if key in dataset.video_keys:
-            video_feat_std[key] = torch.sqrt(video_feat_std[key])
-        else:
-            feat_std[key] = torch.sqrt(feat_std[key])
+        std[key] = torch.sqrt(std[key])
 
-    # Combine results - use video stats for video keys, regular stats for others
     stats = {}
     for key in stats_patterns:
-        if key in dataset.video_keys:
-            stats[key] = {
-                "mean": video_feat_mean[key],
-                "std": video_feat_std[key],
-                "max": video_feat_max[key],
-                "min": video_feat_min[key],
-            }
-        else:
-            stats[key] = {
-                "mean": feat_mean[key],
-                "std": feat_std[key],
-                "max": feat_max[key],
-                "min": feat_min[key],
-            }
-
-    logger.info(
-        f"Computed stats using {max_episodes_for_videos} episodes for video keys: {dataset.video_keys}"
-    )
+        stats[key] = {
+            "mean": mean[key],
+            "std": std[key],
+            "max": max[key],
+            "min": min[key],
+        }
     return stats
 
 
