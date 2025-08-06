@@ -261,12 +261,7 @@ const ModelRow: React.FC<{ model: SupabaseTrainingModel }> = ({ model }) => {
         <TableCell className="w-24">
           <span className="text-sm">{model.model_type}</span>
         </TableCell>
-        <TableCell className="min-w-0 w-40">
-          <div className="min-w-0">
-            {ValueWithTooltip({ value: model.dataset_name })}
-            <CopyButton text={model.dataset_name} hint={"Copy dataset name"} />
-          </div>
-        </TableCell>
+
         <TableCell className="w-20 text-center">
           <span className="text-sm">{model.session_count}</span>
         </TableCell>
@@ -289,6 +284,12 @@ const ModelRow: React.FC<{ model: SupabaseTrainingModel }> = ({ model }) => {
                     </div>
                   ),
               )}
+          </div>
+        </TableCell>
+        <TableCell className="min-w-0 w-40">
+          <div className="min-w-0">
+            {ValueWithTooltip({ value: model.dataset_name })}
+            <CopyButton text={model.dataset_name} hint={"Copy dataset name"} />
           </div>
         </TableCell>
         <TableCell className="w-36">
@@ -477,7 +478,6 @@ export const ModelsCard: React.FC = () => {
                     <TableHead className="w-20">Status</TableHead>
                     <TableHead className="w-48">Model Name</TableHead>
                     <TableHead className="w-24">Model Type</TableHead>
-                    <TableHead className="w-40">Dataset Name</TableHead>
                     <TableHead className="w-20 text-center">
                       <TooltipProvider>
                         <Tooltip>
@@ -508,6 +508,7 @@ export const ModelsCard: React.FC = () => {
                       </TooltipProvider>
                     </TableHead>
                     <TableHead className="w-56">Training Parameters</TableHead>
+                    <TableHead className="w-40">Dataset Name</TableHead>
                     <TableHead className="w-36">Created at</TableHead>
                     <TableHead className="w-20 text-center">Wandb</TableHead>
                   </TableRow>

@@ -76,7 +76,7 @@ export type SupabaseTrainingModel = {
   model_type: string;
   training_params: null | Record<string, string | number | null>;
   session_count: number;
-  success_rate: number;
+  success_rate: number | null;
 };
 
 export type TrainingsList = {
