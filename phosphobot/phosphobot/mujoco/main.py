@@ -23,7 +23,7 @@ class SO100IntegratedControl:
         self.phosphobot_ip = "192.168.178.190"
         self.phosphobot_port = 80
         self.joints_read_url = f"http://{self.phosphobot_ip}:{self.phosphobot_port}/joints/read"
-        self.mirror_frequency = 0.2
+        self.mirror_frequency = 0.05
         self.mirroring_active = False
         self.mirror_thread = None
         
