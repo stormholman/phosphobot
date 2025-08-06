@@ -42,49 +42,50 @@ async def get_models(
 
     # CREATE OR REPLACE FUNCTION public.get_models_with_metrics(p_user_id uuid, p_limit integer DEFAULT 1000)
     # RETURNS TABLE (
-    #   id               integer,
-    #   status           text,
-    #   user_id          uuid,
-    #   dataset_name     text,
-    #   model_name       text,
-    #   requested_at     timestamp,
-    #   terminated_at    timestamp,
-    #   used_wandb       boolean,
-    #   model_type       text,
-    #   training_params  jsonb,
-    #   session_count    bigint,
-    #   success_rate     double precision
+    # id               integer,
+    # status           text,
+    # user_id          uuid,
+    # dataset_name     text,
+    # model_name       text,
+    # requested_at     timestamp,
+    # terminated_at    timestamp,
+    # used_wandb       boolean,
+    # model_type       text,
+    # training_params  jsonb,
+    # session_count    bigint,
+    # success_rate     double precision
     # )
     # LANGUAGE sql
+    # SECURITY INVOKER
+    # SET search_path = 'public'
     # AS $$
-    #   WITH recent_trainings AS (
+    # WITH recent_trainings AS (
     #     SELECT
-    #       id,
-    #       status,
-    #       user_id,
-    #       dataset_name,
-    #       model_name,
-    #       requested_at,
-    #       terminated_at,
-    #       used_wandb,
-    #       model_type,
-    #       training_params
-    #     FROM trainings
+    #     id,
+    #     status,
+    #     user_id,
+    #     dataset_name,
+    #     model_name,
+    #     requested_at,
+    #     terminated_at,
+    #     used_wandb,
+    #     model_type,
+    #     training_params
+    #     FROM public.trainings
     #     WHERE user_id = p_user_id
     #     ORDER BY requested_at DESC
     #     LIMIT p_limit
-    #   ), stats AS (
+    # ), stats AS (
     #     SELECT
-    #       model_id,
-    #       COUNT(*)                          AS session_count,
-    #       SUM(CASE WHEN feedback IS NOT NULL THEN 1 ELSE 0 END) AS feedback_given,
-    #       SUM(CASE WHEN feedback = 'positive' THEN 1 ELSE 0 END) AS positive_count
-    #     FROM ai_control_sessions
-    #     -- WHERE model_id IN (SELECT id FROM recent_trainings)
+    #     model_id,
+    #     COUNT(*)                          AS session_count,
+    #     SUM(CASE WHEN feedback IS NOT NULL THEN 1 ELSE 0 END) AS feedback_given,
+    #     SUM(CASE WHEN feedback = 'positive' THEN 1 ELSE 0 END) AS positive_count
+    #     FROM public.ai_control_sessions
     #     WHERE user_id = p_user_id
     #     GROUP BY model_id
-    #   )
-    #   SELECT
+    # )
+    # SELECT
     #     t.id,
     #     t.status,
     #     t.user_id,
@@ -97,13 +98,13 @@ async def get_models(
     #     t.training_params,
     #     COALESCE(s.session_count, 0)      AS session_count,
     #     CASE
-    #       WHEN COALESCE(s.feedback_given, 0) = 0 THEN 0.0
-    #       ELSE s.positive_count::double precision / s.feedback_given
+    #     WHEN COALESCE(s.feedback_given, 0) = 0 THEN 0.0
+    #     ELSE s.positive_count::double precision / s.feedback_given
     #     END                                AS success_rate
-    #   FROM recent_trainings t
-    #   LEFT JOIN stats s
+    # FROM recent_trainings t
+    # LEFT JOIN stats s
     #     ON t.model_name = s.model_id
-    #   ORDER BY t.requested_at DESC;
+    # ORDER BY t.requested_at DESC;
     # $$;
 
     result = await client.rpc(
