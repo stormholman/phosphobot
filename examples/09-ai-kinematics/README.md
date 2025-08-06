@@ -9,9 +9,7 @@ A computer vision and robotics system that combines RGBD cameras, ArUco marker t
 - **AI Vision Analysis**: Claude-powered object detection with natural language descriptions
 - **3D Coordinate Transformation**: Pixel → Camera → ArUco Marker → Robot coordinate conversion
 - **Robot Control**: HTTP API integration for robotic arm movement
-- **Non-Interactive Operation**: Designed for web application integration without user prompts
 - **Multiple Operation Modes**: Manual and AI Vision modes
-- **Web API Integration**: Remote control via phosphobot framework endpoints
 
 ## System Architecture
 
