@@ -49,21 +49,17 @@ pip install -r requirements.txt
 
 ## Quick Start
 
+### Setup Checklist
+
+1. **Device Setup**: iPhone Pro or device with RGBD capabilities mounted on holder
+2. **App Installation**: Install [Record3D](https://apps.apple.com/us/app/record3d-3d-videos/id1477716895?ls=1) with USB connection in-app purchase ($6 one-time)
+3. **ArUco Marker**: Generate marker ID=0 at [ArUco Generator](https://chev.me/arucogen/) and print at 4x4cm size
+4. **Robot Connection**: Ensure robot is connected and endpoint verified
+5. **API Key**: Set Anthropic API key in web interface configuration
+6. **Marker Placement**: After calling move init function, place ArUco marker directly under end-effector
+7. **Camera View**: Ensure ArUco marker remains visible in RGBD camera view throughout operation
+
 ### Direct Launch
-1. **Setup ArUco Marker**
-   ```bash
-   python generate_aruco.py --id 0 --size 200 --output marker_0.png
-   ```
-   Print the generated marker at 4x4cm size.
-
-2. **Configure API Key**
-   ```bash
-   export ANTHROPIC_API_KEY="your_api_key_here"
-   ```
-
-3. **Start Record3D** on your iPhone and connect to the same network.
-
-4. **Run the Application**
 ```bash
 # Manual mode
 python main.py manual
@@ -75,71 +71,9 @@ python main.py ai
 python main.py ai "red cup"
 ```
 
-### Web API Control
-The AI kinematics system can be controlled remotely through the phosphobot web interface:
 
-- **Set API Key**: `POST /kinematics/set-api-key`
-- **Check API Key Status**: `GET /kinematics/api-key-status`
-- **Launch Kinematics**: `POST /kinematics/launch?mode=manual|ai`
-- **Stop Kinematics**: `POST /kinematics/stop`
-- **Check Status**: `GET /kinematics/status`
 
-The web API automatically handles process management, API key management, and provides real-time status feedback.
 
-## Web API Integration
-
-The AI kinematics system integrates with the phosphobot web framework through REST API endpoints:
-
-### Available Endpoints
-
-#### API Key Management
-- **`POST /kinematics/set-api-key`** - Set Anthropic API key for AI features
-  - Body: `{"api_key": "sk-ant-api03-..."}`
-  - Returns: Status confirmation
-  - Validation: Checks for valid Anthropic API key format
-
-- **`GET /kinematics/api-key-status`** - Check if API key is configured
-  - Returns: `{"api_key_set": true/false}`
-  - Used by frontend to enable/disable AI mode
-
-#### Process Control
-- **`POST /kinematics/launch`** - Launch AI kinematics process
-  - Query params: `mode=manual|ai`
-  - Body (optional): `{"task": "object description"}` for AI mode
-  - Returns: Status confirmation with process PID
-  - Background: Launches `python main.py <mode> [task]` in ai_kinematics directory
-
-- **`POST /kinematics/stop`** - Stop running kinematics process
-  - Returns: Status confirmation
-  - Process: Graceful termination with 5-second timeout
-
-- **`GET /kinematics/status`** - Check kinematics process status
-  - Returns: Current status (running/stopped) with PID if active
-
-### API Response Format
-```json
-{
-  "status": "ok",
-  "message": "AI-kinematics launched in ai mode"
-}
-```
-
-### Error Handling
-- **Already running**: Returns 400 if kinematics process is already active
-- **Missing API key**: Returns 400 if AI mode requested without API key
-- **Invalid API key**: Returns 400 for malformed Anthropic API keys
-- **Process not found**: Returns 500 if main.py script is missing
-- **Launch failure**: Returns 500 with detailed error information
-- **Device connection**: Returns 500 with Record3D connection troubleshooting
-
-### Integration with phosphobot
-The kinematics endpoints are automatically registered with the main phosphobot FastAPI application and can be accessed through the web dashboard. The system supports:
-
-- **Non-interactive operation**: No user prompts or confirmations
-- **Automatic API key management**: Secure in-memory storage
-- **Process lifecycle management**: Automatic cleanup and error recovery
-- **Real-time status monitoring**: Process state tracking
-- **Debug output streaming**: All logs visible in web application console
 
 ## Operation Modes
 
@@ -211,60 +145,29 @@ self.aruco_marker_size = 0.04      # 4cm physical size
 ### Camera Calibration
 Automatic calibration from Record3D intrinsics. Manual override available in code.
 
-### Web API Settings
-The kinematics endpoints are configured in `phosphobot/endpoints/kinematics.py`:
-- Process timeout: 5 seconds for graceful shutdown
-- Working directory: ai_kinematics folder
-- Command: `python main.py <mode> [task]`
-- API key storage: In-memory with validation
+
 
 ## Usage Examples
 
 ### Manual Targeting
-1. Start application: `python main.py manual`
-2. Hover mouse over objects to see 3D coordinates
-3. Left-click to send coordinates to robot automatically
-4. Robot movement is confirmed automatically
+1. Complete setup checklist above
+2. Start application: `python main.py manual`
+3. Hover mouse over objects to see 3D coordinates
+4. Left-click to send coordinates to robot automatically
 
 ### AI Object Detection
-1. Start application: `python main.py ai "red cup"`
-2. AI analyzes first frame and finds object
-3. Coordinates automatically sent to robot
-4. No user interaction required
+1. Complete setup checklist above
+2. Start application: `python main.py ai "red cup"`
+3. AI analyzes first frame and finds object
+4. Coordinates automatically sent to robot
 
-### Web API Usage
-```bash
-# Set API key
-curl -X POST "http://localhost:8000/kinematics/set-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"api_key": "sk-ant-api03-..."}'
 
-# Launch AI mode
-curl -X POST "http://localhost:8000/kinematics/launch?mode=ai" \
-  -H "Content-Type: application/json" \
-  -d '{"task": "red cup"}'
-
-# Check status
-curl "http://localhost:8000/kinematics/status"
-
-# Stop process
-curl -X POST "http://localhost:8000/kinematics/stop"
-```
 
 ## Keyboard Controls
 
 - `q` - Quit application
 
-## Web Application Integration
 
-The system is designed to work with web applications through the phosphobot framework:
-
-- **Non-interactive operation**: No user prompts or confirmations
-- **Command-line arguments**: Mode and task specified at startup
-- **Automatic robot movement**: No manual confirmation required
-- **Debug output**: All logs visible in web application console
-- **API key management**: Secure storage and validation
-- **Process lifecycle**: Automatic startup, monitoring, and cleanup
 
 ## Troubleshooting
 
@@ -291,15 +194,10 @@ The system is designed to work with web applications through the phosphobot fram
 - Test with curl commands
 
 ### API Key Issues
-- Ensure `ANTHROPIC_API_KEY` environment variable is set
 - Verify API key is valid and has sufficient credits
 - Check network connectivity to Anthropic API
 
-### Web API Issues
-- Check phosphobot server is running
-- Verify kinematics endpoints are registered
-- Check process permissions for Python execution
-- Ensure Record3D device is connected and accessible
+
 
 ### Process Management Issues
 - Check if kinematics process is already running
@@ -364,19 +262,7 @@ python main.py manual
 python main.py ai "test object"
 ```
 
-### API Endpoint Testing
-```bash
-# Test API key management
-curl -X POST "http://localhost:8000/kinematics/set-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"api_key": "sk-ant-api03-..."}'
 
-# Test process launch
-curl -X POST "http://localhost:8000/kinematics/launch?mode=manual"
-
-# Test status check
-curl "http://localhost:8000/kinematics/status"
-```
 
 ## Command Line Usage
 
