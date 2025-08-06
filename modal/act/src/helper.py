@@ -378,7 +378,7 @@ def compute_stats(
 
     # mean and std will be computed incrementally while max and min will track the running value.
     feat_mean, feat_std, feat_max, feat_min = {}, {}, {}, {}
-    video_mean, video_std, video_max, video_min = {}, {}, {}, {}
+    video_feat_mean, video_feat_std, video_feat_max, video_feat_min = {}, {}, {}, {}
 
     # Initialize stats for all keys
     for key in stats_patterns:
@@ -389,10 +389,10 @@ def compute_stats(
 
         # Separate initialization for video keys
         if key in dataset.video_keys:
-            video_mean[key] = torch.tensor(0.0).float()
-            video_std[key] = torch.tensor(0.0).float()
-            video_max[key] = torch.tensor(-float("inf")).float()
-            video_min[key] = torch.tensor(float("inf")).float()
+            video_feat_mean[key] = torch.tensor(0.0).float()
+            video_feat_std[key] = torch.tensor(0.0).float()
+            video_feat_max[key] = torch.tensor(-float("inf")).float()
+            video_feat_min[key] = torch.tensor(float("inf")).float()
 
     first_batch: Optional[dict] = None
     running_item_count = 0  # for online mean computation
@@ -413,46 +413,39 @@ def compute_stats(
             first_batch = deepcopy(batch)
 
         for key, pattern in stats_patterns.items():
-            if key not in batch.keys():
-                if not error_raised:
-                    logger.error(
-                        f"[MEAN] Key '{key}' from stats_patterns not found in batch {i}/{ceil(max_num_samples) / batch_size}. Available keys: {batch.keys()}. Ignoring this key."
-                    )
+            if key not in batch:
                 continue
 
             batch[key] = batch[key].float()
 
-            # Handle video keys with sampling
             if key in dataset.video_keys:
-                # Filter batch to only include sampled indices for videos
-                batch_indices = batch["index"].numpy()
+                batch_indices = batch["index"].cpu().numpy()
                 mask = np.isin(batch_indices, video_sample_indices)
 
-                if (
-                    mask.sum() > 0
-                ):  # Only process if we have sampled indices in this batch
-                    sampled_batch_data = batch[key][mask]
+                if mask.sum() > 0:
+                    # <-- ensure mask is 1-D, length B -->
+                    mask_tensor = torch.from_numpy(mask).bool().view(-1)
+                    sampled_batch_data = batch[key][mask_tensor]
                     sampled_batch_size = len(sampled_batch_data)
                     video_running_item_count += sampled_batch_size
 
-                    # Compute stats only on sampled data
                     batch_mean = einops.reduce(sampled_batch_data, pattern, "mean")
-                    video_mean[key] = (
-                        video_mean[key]
+                    video_feat_mean[key] = (
+                        video_feat_mean[key]
                         + sampled_batch_size
-                        * (batch_mean - video_mean[key])
+                        * (batch_mean - video_feat_mean[key])
                         / video_running_item_count
                     )
-                    video_max[key] = torch.maximum(
-                        video_max[key],
+                    video_feat_max[key] = torch.maximum(
+                        video_feat_max[key],
                         einops.reduce(sampled_batch_data, pattern, "max"),
                     )
-                    video_min[key] = torch.minimum(
-                        video_min[key],
+                    video_feat_min[key] = torch.minimum(
+                        video_feat_min[key],
                         einops.reduce(sampled_batch_data, pattern, "min"),
                     )
             else:
-                # Non-video keys: use full dataset as before
+                # non-video keys unchanged
                 batch_mean = einops.reduce(batch[key], pattern, "mean")
                 feat_mean[key] = (
                     feat_mean[key]
@@ -491,49 +484,41 @@ def compute_stats(
         this_batch_size = len(batch["index"])
         running_item_count += this_batch_size
 
-        # Sanity check to make sure the batches are still in the same order as before.
         if first_batch_ is None:
             first_batch_ = deepcopy(batch)
-            # Ensure first_batch is not None before indexing
             if first_batch is not None:
                 for key in stats_patterns:
                     assert torch.equal(first_batch_[key], first_batch[key])
 
         for key, pattern in stats_patterns.items():
-            if key not in batch.keys():
-                if not error_raised:
-                    logger.error(
-                        f"[STD] Key '{key}' from stats_patterns not found in batch {i}/{ceil(max_num_samples) / batch_size}. Available keys: {batch.keys()}. Ignoring this key."
-                    )
+            if key not in batch:
                 continue
 
             batch[key] = batch[key].float()
 
-            # Handle video keys with sampling
             if key in dataset.video_keys:
-                # Filter batch to only include sampled indices for videos
-                batch_indices = batch["index"].numpy()
+                batch_indices = batch["index"].cpu().numpy()
                 mask = np.isin(batch_indices, video_sample_indices)
 
-                if (
-                    mask.sum() > 0
-                ):  # Only process if we have sampled indices in this batch
-                    sampled_batch_data = batch[key][mask]
+                if mask.sum() > 0:
+                    # <-- same 1-D mask fix here -->
+                    mask_tensor = torch.from_numpy(mask).bool().view(-1)
+                    sampled_batch_data = batch[key][mask_tensor]
                     sampled_batch_size = len(sampled_batch_data)
                     video_running_item_count += sampled_batch_size
 
-                    # Compute std only on sampled data
                     batch_std = einops.reduce(
-                        (sampled_batch_data - video_mean[key]) ** 2, pattern, "mean"
+                        (sampled_batch_data - video_feat_mean[key]) ** 2,
+                        pattern,
+                        "mean",
                     )
-                    video_std[key] = (
-                        video_std[key]
+                    video_feat_std[key] = (
+                        video_feat_std[key]
                         + sampled_batch_size
-                        * (batch_std - video_std[key])
+                        * (batch_std - video_feat_std[key])
                         / video_running_item_count
                     )
             else:
-                # Non-video keys: use full dataset as before
                 batch_std = einops.reduce(
                     (batch[key] - feat_mean[key]) ** 2, pattern, "mean"
                 )
@@ -548,7 +533,7 @@ def compute_stats(
     # Finalize standard deviation computation
     for key in stats_patterns:
         if key in dataset.video_keys:
-            video_std[key] = torch.sqrt(video_std[key])
+            video_feat_std[key] = torch.sqrt(video_feat_std[key])
         else:
             feat_std[key] = torch.sqrt(feat_std[key])
 
@@ -557,10 +542,10 @@ def compute_stats(
     for key in stats_patterns:
         if key in dataset.video_keys:
             stats[key] = {
-                "mean": video_mean[key],
-                "std": video_std[key],
-                "max": video_max[key],
-                "min": video_min[key],
+                "mean": video_feat_mean[key],
+                "std": video_feat_std[key],
+                "max": video_feat_max[key],
+                "min": video_feat_min[key],
             }
         else:
             stats[key] = {
