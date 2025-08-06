@@ -62,7 +62,7 @@ class SO100Simulation:
         self.sim_thread = threading.Thread(target=self._simulation_loop, daemon=True)
         self.sim_thread.start()
         
-        print("✓ SO-100 simulation initialized successfully!")
+        print("SO-100 simulation initialized successfully!")
 
     def _init_viewer(self):
         """Initialize viewer with better error handling."""
@@ -71,7 +71,7 @@ class SO100Simulation:
             try:
                 self._viewer_context = mj.viewer.launch_passive(self.model, self.data)
                 self.viewer = self._viewer_context.__enter__()
-                print(f"✓ Viewer initialized successfully (attempt {attempt + 1})")
+                print(f"Viewer initialized successfully (attempt {attempt + 1})")
                 return
             except Exception as e:
                 print(f"Viewer initialization attempt {attempt + 1} failed: {e}")
@@ -82,12 +82,12 @@ class SO100Simulation:
     def pause_simulation(self):
         """Pause the simulation loop."""
         self.paused = True
-        print("🔄 Simulation paused")
+        print("Simulation paused")
 
     def resume_simulation(self):
         """Resume the simulation loop."""
         self.paused = False
-        print("▶️  Simulation resumed")
+        print("Simulation resumed")
 
     def _load_so100_model(self):
         """Load the SO-100 model from the XML file."""
@@ -278,7 +278,7 @@ class SO100Simulation:
             except:
                 pass
         
-        print("✓ Simulation closed cleanly")
+        print("Simulation closed cleanly")
 
 
 def main():

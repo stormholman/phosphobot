@@ -17,13 +17,13 @@ class SO100IntegratedControl:
         print("Real-time Simulation + Robot Mirroring")
         print("=" * 70)
         
+        # Interactive configuration
+        self.setup_configuration()
+        
         print("Initializing simulation with MuJoCo viewer...")
         self.sim = SO100Simulation()
         
-        self.phosphobot_ip = "192.168.178.190"
-        self.phosphobot_port = 80
-        self.joints_read_url = f"http://{self.phosphobot_ip}:{self.phosphobot_port}/joints/read"
-        self.mirror_frequency = 0.2
+        self.mirror_frequency = 0.05
         self.mirroring_active = False
         self.mirror_thread = None
         
@@ -48,6 +48,34 @@ class SO100IntegratedControl:
         for i, name in enumerate(self.sim.joint_names):
             print(f"  {i}: {name}")
 
+    def setup_configuration(self):
+        """Interactive setup for robot endpoint"""
+        print("SO-100 Configuration")
+        print("=" * 40)
+        
+        # Robot endpoint
+        default_endpoint = "http://192.168.178.190:80"
+        endpoint_input = input(f"Robot endpoint (press Enter for default: {default_endpoint}): ").strip()
+        self.phosphobot_ip = "192.168.178.190"
+        self.phosphobot_port = 80
+        
+        if endpoint_input:
+            # Parse custom endpoint
+            if endpoint_input.startswith("http://"):
+                endpoint_input = endpoint_input[7:]
+            if ":" in endpoint_input:
+                self.phosphobot_ip = endpoint_input.split(":")[0]
+                self.phosphobot_port = int(endpoint_input.split(":")[1])
+            else:
+                self.phosphobot_ip = endpoint_input
+                self.phosphobot_port = 80
+        
+        self.joints_read_url = f"http://{self.phosphobot_ip}:{self.phosphobot_port}/joints/read"
+        print(f"Using robot endpoint: {self.joints_read_url}")
+        
+        print("Configuration complete")
+        print("=" * 40)
+
     def apply_calibration(self, raw_angles):
         if len(raw_angles) != 6:
             return raw_angles
@@ -58,8 +86,8 @@ class SO100IntegratedControl:
             phys_joint_idx = self.joint_calibration["mapping"][sim_joint_idx]
             if phys_joint_idx < len(raw_angles):
                 angle = raw_angles[phys_joint_idx]
-                angle *= self.joint_calibration["directions"][sim_joint_idx]
-                angle += self.joint_calibration["offsets"][sim_joint_idx]
+                angle *= self.joint_calibration["directions"][phys_joint_idx]
+                angle += self.joint_calibration["offsets"][phys_joint_idx]
                 calibrated_angles[sim_joint_idx] = angle
         
         return calibrated_angles
