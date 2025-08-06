@@ -25,6 +25,11 @@ pip install -r requirements.txt
 
 ## Quick Start
 
+### Setup Requirements
+- Python 3.8+ with MuJoCo dependencies
+- SO-100 robot connected and accessible via HTTP API
+- Robot endpoint URL configured (default: `http://192.168.178.190:80`)
+
 ### Direct Launch
 Run the integrated simulation with the MuJoCo viewer:
 
@@ -120,17 +125,17 @@ The SO-100 workspace limits:
 ### Common Issues
 
 1. **MuJoCo Viewer Issues**
-   - Make sure you have MuJoCo installed: `pip install mujoco`
+   - Install MuJoCo: `pip install mujoco`
    - On macOS, use `mjpython` instead of `python`
 
 2. **Robot Connection Issues**
-   - Verify the robot is powered on and accessible
-   - Check the IP address and port in the configuration
-   - Ensure no firewall is blocking the connection
+   - Verify robot is powered on and accessible
+   - Check IP address and port configuration
+   - Ensure no firewall is blocking connection
 
 3. **Model Loading Issues**
-   - Make sure `so100_arm.xml` exists in the current directory
-   - Verify the `assets/` folder contains required 3D models
+   - Verify `so100_arm.xml` exists in current directory
+   - Check `assets/` folder contains required 3D models
 
 ### Error Messages
 
